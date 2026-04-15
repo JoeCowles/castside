@@ -1,219 +1,80 @@
-'use client';
-// src/app/page.tsx
-// podcommentators main page — orchestrates audio/video sources, transcript, and AI persona sidebar.
+import Link from 'next/link';
+import styles from './landing.module.css';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { AppMode, AudioSource } from '@/types';
-import { useSettings } from '@/context/SettingsContext';
-import { useTranscript } from '@/hooks/useTranscript';
-import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
-import AudioSourcePanel from '@/components/AudioSourcePanel';
-import TranscriptPanel from '@/components/TranscriptPanel';
-import CommentatorRail from '@/components/CommentatorRail';
-import VideoDisplay from '@/components/VideoDisplay';
-import SettingsModal from '@/components/SettingsModal';
-import styles from './page.module.css';
+export const metadata = {
+  title: 'Podcommentators | AI Powered Live Commentary',
+  description: 'Give your stream an AI cast. Live transcription and real-time AI commentators for your audio and video streams.',
+};
 
-export default function Home() {
-  const { settings } = useSettings();
-  const [mode, setMode] = useState<AppMode>('enhanced');
-  const [source, setSource] = useState<AudioSource>('mic');
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
-  // Video state
-  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
-  const [isVideoStream, setIsVideoStream] = useState(false);
-  const streamAudioRef = useRef<HTMLAudioElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  // ── Enabled personas (filtered list) ──────────────────────────────────────
-  const enabledPersonas = useMemo(
-    () => settings.personas.filter((persona) => persona.enabled),
-    [settings.personas]
-  );
-
-  // ── Waveform state change callback ────────────────────────────────────────
-  const handleWaveformChange = useCallback(() => { /* personaStates are the source of truth */ }, []);
-
-  // ── Persona orchestrator ─────────────────────────────────────────────────
-  const { personaStates, onChunkCommitted } = usePersonaOrchestrator({
-    personas: enabledPersonas,
-    wordThreshold: settings.wordThreshold,
-    apiKey: settings.apiKey,
-    model: settings.model,
-    onWaveformStateChange: handleWaveformChange,
-  });
-
-  // ── Transcript hook ───────────────────────────────────────────────────────
-  const { chunks, interimText, isListening, startListening, stopListening, clearTranscript, micLevel, recognitionError, transcriptionEngine } =
-    useTranscript({
-      source,
-      streamAudioRef,
-      apiKey: settings.apiKey,
-      elevenLabsKey: settings.elevenLabsKey,
-      onChunkCommitted,
-      onPreviewStreamReady: setPreviewStream,
-    });
-
-  // ── Camera start/stop ─────────────────────────────────────────────────────
-  const handleToggleListening = useCallback(async () => {
-    if (isListening) {
-      stopListening();
-      if (source === 'camera') {
-        previewStream?.getTracks().forEach((t) => t.stop());
-        setPreviewStream(null);
-      }
-      return;
-    }
-
-    if (source === 'camera') {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setPreviewStream(stream);
-      } catch (err) {
-        alert('Could not access camera/microphone: ' + (err as Error).message);
-        return;
-      }
-    }
-    // 'screen' source: getDisplayMedia picker is opened inside the hook; nothing to do here
-    startListening();
-  }, [isListening, source, previewStream, startListening, stopListening]);
-
-  // ── Video stream URL handler ───────────────────────────────────────────────
-  const handleStreamUrlChange = useCallback((url: string, isVideo: boolean) => {
-    setIsVideoStream(isVideo);
-    if (isVideo && videoRef.current) {
-      videoRef.current.src = url;
-    }
-  }, []);
-
-  const handleStopVideo = useCallback(() => {
-    stopListening();
-    previewStream?.getTracks().forEach((track) => track.stop());
-    setPreviewStream(null);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.removeAttribute('src');
-      videoRef.current.load();
-    }
-    setIsVideoStream(false);
-  }, [previewStream, stopListening]);
-
-  const hasApiKey = Boolean(settings.apiKey);
-  const hasVideo = Boolean(previewStream) || isVideoStream;
-
+export default function LandingPage() {
   return (
-    <div className={styles.app}>
-      {/* ── Top Bar ── */}
-      <header className={styles.topbar}>
-        <div className={styles.topbarLeft}>
-          <div className={styles.logo}>
-            <span className={styles.logoIcon}>🎙️</span>
-            <span className={styles.logoText}>podcommentators</span>
-            <span className={styles.logoBadge}>AI</span>
-          </div>
+    <div className={styles.container}>
+      {/* Animated Glowing Orbs Background */}
+      <div className={styles.backgroundMesh}>
+        <div className={styles.orb1} />
+        <div className={styles.orb2} />
+        <div className={styles.orb3} />
+      </div>
 
-          <div className={styles.modeTabs}>
-            <button
-              className={[styles.modeTab, mode === 'regular' ? styles.modeTabActive : ''].join(' ')}
-              onClick={() => setMode('regular')}
-              id="btn-mode-regular"
-            >
-              Regular
-            </button>
-            <button
-              className={[styles.modeTab, mode === 'enhanced' ? styles.modeTabActive : ''].join(' ')}
-              onClick={() => setMode('enhanced')}
-              id="btn-mode-enhanced"
-            >
-              ✨ Enhanced
-            </button>
-          </div>
+      <main className={styles.content}>
+        <div className={styles.badge}>
+          <span className={styles.badgeNew}>NEW</span>
+          Zero-Latency Live Vibe Check
         </div>
 
-        <div className={styles.topbarRight}>
-          {hasVideo && (
-            <button
-              className={styles.stopVideoBtn}
-              onClick={handleStopVideo}
-              id="btn-stop-video"
+        <h1 className={styles.title}>
+          Give Your Stream an AI Cast
+        </h1>
+        
+        <p className={styles.subtitle}>
+          Connect your microphone, camera, or stream URL and let tailored AI personas react live to everything you say in real-time. No backend required.
+        </p>
+
+        <div className={styles.ctaWrapper}>
+          <Link href="/app" className={styles.ctaButton}>
+            <span>Launch Podcommentators</span>
+            <svg 
+              className={styles.ctaIcon}
+              viewBox="0 0 24 24" 
+              xmlns="http://www.w3.org/2000/svg"
             >
-              ⏹ Stop
-            </button>
-          )}
-          <div className={styles.apiStatus}>
-            <span className={[styles.statusDot, hasApiKey ? styles.statusConnected : ''].join(' ')} />
-            <span className={styles.statusText}>{hasApiKey ? 'Gemini Connected' : 'No API Key'}</span>
-          </div>
-          <button
-            className={styles.settingsBtn}
-            onClick={() => setSettingsOpen(true)}
-            id="btn-settings"
-          >
-            ⚙️ Settings
-          </button>
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </Link>
         </div>
-      </header>
 
-      {/* ── Main Layout ── */}
-      <main className={[styles.layout, mode === 'enhanced' && !hasVideo ? styles.layoutEnhanced : ''].join(' ')}>
-
-        {/* ── VIDEO MODE: full-width video with overlay ── */}
-        {hasVideo ? (
-          <div className={styles.videoMode}>
-            <VideoDisplay
-              mediaStream={previewStream}
-              videoRef={videoRef}
-              hasStreamUrlVideo={isVideoStream}
-              isListening={isListening}
-              source={source}
-            />
+        <div className={styles.featuresGrid}>
+          <div className={styles.featureCard}>
+            <div className={styles.featureIconWrapper}>
+              <span className={styles.featureIcon}>🎙️</span>
+            </div>
+            <h3 className={styles.featureTitle}>Any Source</h3>
+            <p className={styles.featureDesc}>
+              Listen directly to your mic, grab your screen with audio, or hook into OBS Virtual Camera instantly.
+            </p>
           </div>
-        ) : (
-          /* ── AUDIO MODE: left panel + optional sidebar ── */
-          <>
-            <section className={styles.mainPanel}>
-              {!hasApiKey && (
-                <div className={styles.apiBanner}>
-                  <span>⚠️</span>
-                  <span>
-                    Add your Gemini API key in{' '}
-                    <button className={styles.bannerBtn} onClick={() => setSettingsOpen(true)}>Settings</button>
-                    {' '}to enable AI personas.
-                  </span>
-                </div>
-              )}
 
-              <AudioSourcePanel
-                source={source}
-                onSourceChange={(s) => { stopListening(); setPreviewStream(null); setIsVideoStream(false); setSource(s); }}
-                isListening={isListening}
-                onToggleListening={handleToggleListening}
-                micLevel={micLevel}
-                recognitionError={recognitionError}
-                transcriptionEngine={transcriptionEngine}
-                streamAudioRef={streamAudioRef}
-                onVideoStreamReady={setPreviewStream}
-                onStreamUrlChange={handleStreamUrlChange}
-              />
+          <div className={styles.featureCard}>
+            <div className={styles.featureIconWrapper}>
+              <span className={styles.featureIcon}>🧠</span>
+            </div>
+            <h3 className={styles.featureTitle}>Custom Personas</h3>
+            <p className={styles.featureDesc}>
+              Create your own panel of commentators. Adjust their personality, prompt, and token settings on the fly.
+            </p>
+          </div>
 
-              <TranscriptPanel
-                chunks={chunks}
-                interimText={interimText}
-                isListening={isListening}
-                onClear={clearTranscript}
-              />
-            </section>
-          </>
-        )}
+          <div className={styles.featureCard}>
+            <div className={styles.featureIconWrapper}>
+              <span className={styles.featureIcon}>⚡️</span>
+            </div>
+            <h3 className={styles.featureTitle}>100% Client-Side</h3>
+            <p className={styles.featureDesc}>
+              Bring your own API keys. Everything runs securely in your browser with zero server latency or data collection.
+            </p>
+          </div>
+        </div>
       </main>
-
-      {/* ── Commentator Rail — enhanced mode only ── */}
-      {mode === 'enhanced' && (
-        <CommentatorRail personas={enabledPersonas} personaStates={personaStates} />
-      )}
-
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
