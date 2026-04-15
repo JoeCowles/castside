@@ -1,0 +1,80 @@
+'use client';
+// src/components/TranscriptPanel.tsx
+
+import { useEffect, useRef } from 'react';
+import { TranscriptChunk } from '@/types';
+import styles from './TranscriptPanel.module.css';
+
+interface TranscriptPanelProps {
+  chunks: TranscriptChunk[];
+  interimText: string;
+  isListening: boolean;
+  onClear: () => void;
+}
+
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+export default function TranscriptPanel({
+  chunks,
+  interimText,
+  isListening,
+  onClear,
+}: TranscriptPanelProps) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom on new content
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chunks, interimText]);
+
+  return (
+    <div className={styles.panel}>
+      <div className={styles.header}>
+        <div className={styles.headerLeft}>
+          <h2 className={styles.title}>Live Transcript</h2>
+          {isListening && (
+            <span className={styles.liveBadge}>
+              <span className={styles.liveDot} />
+              LIVE
+            </span>
+          )}
+        </div>
+        <div className={styles.headerRight}>
+          <span className={styles.chunkCount}>{chunks.length} segments</span>
+          <button className={styles.clearBtn} onClick={onClear} disabled={chunks.length === 0}>
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.body} ref={bodyRef}>
+        {chunks.length === 0 && !interimText ? (
+          <div className={styles.empty}>
+            <span className={styles.emptyIcon}>🎙️</span>
+            <p>Start listening to see the live transcript here.</p>
+            <p className={styles.emptyHint}>Tip: Use a virtual audio cable to route any podcast through your mic input.</p>
+          </div>
+        ) : (
+          <>
+            {chunks.map((chunk) => (
+              <div key={chunk.id} className={styles.chunk}>
+                <span className={styles.timestamp}>{formatTime(chunk.timestamp)}</span>
+                <p className={styles.chunkText}>{chunk.text}</p>
+              </div>
+            ))}
+            {interimText && (
+              <div className={[styles.chunk, styles.interim].join(' ')}>
+                <span className={styles.timestamp}>…</span>
+                <p className={styles.chunkText}>{interimText}</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

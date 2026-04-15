@@ -1,0 +1,302 @@
+/* src/components/PersonaCard.module.css */
+
+/* ── Card shell ────────────────────────────────────────────────────────── */
+
+.card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.35s ease, box-shadow 0.35s ease, background 0.35s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle coloured gradient wash on speaking */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--persona-color, #4f8ef7) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.cardSpeaking {
+  border-color: color-mix(in srgb, var(--persona-color, #4f8ef7) 70%, transparent);
+  box-shadow:
+    0 0 20px color-mix(in srgb, var(--persona-color, #4f8ef7) 20%, transparent),
+    0 4px 24px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.cardSpeaking::before {
+  opacity: 0.04;
+}
+
+/* Very faint border flicker when deciding */
+.cardThinking {
+  border-color: color-mix(in srgb, var(--persona-color, #4f8ef7) 25%, transparent);
+}
+
+.card.compact {
+  padding: 10px 12px;
+  gap: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+
+/* ── Avatar ────────────────────────────────────────────────────────────── */
+
+.avatarWrap {
+  position: relative;
+  flex-shrink: 0;
+  /* Slides slightly left when speaking to give waveform room */
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+}
+
+.avatarActive {
+  transform: translateX(-4px);
+}
+
+.avatar {
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--persona-color, #4f8ef7) 50%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.2), transparent 45%),
+    linear-gradient(135deg, color-mix(in srgb, var(--persona-color, #4f8ef7) 75%, #0f172a), #111827);
+  /* Allows thinking breath to target the child */
+  transition: box-shadow 0.4s ease;
+}
+
+.avatarGlyph {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ── Thinking: very subtle breathing glow on avatar ── */
+.avatarThinking .avatar {
+  animation: thinkingBreath 2.6s ease-in-out infinite;
+}
+
+@keyframes thinkingBreath {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--persona-color, #4f8ef7) 20%, transparent);
+    transform: scale(1.018);
+  }
+}
+
+
+/* ── Status dot ────────────────────────────────────────────────────────── */
+
+.statusDot {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #3d4050;
+  border: 2px solid #0d0d18;
+  transition: background 0.35s, box-shadow 0.35s;
+}
+
+/* Thinking: slow dim pulse */
+.dotThinking {
+  background: color-mix(in srgb, var(--persona-color, #4f8ef7) 60%, transparent);
+  animation: dotThinkPulse 2.6s ease-in-out infinite;
+}
+
+@keyframes dotThinkPulse {
+  0%, 100% { box-shadow: 0 0 3px 0 color-mix(in srgb, var(--persona-color, #4f8ef7) 30%, transparent); }
+  50%       { box-shadow: 0 0 7px 1px color-mix(in srgb, var(--persona-color, #4f8ef7) 50%, transparent); }
+}
+
+/* Speaking: brighter, faster pulse */
+.dotSpeaking {
+  background: var(--persona-color, #4f8ef7);
+  animation: dotSpeakPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dotSpeakPulse {
+  0%, 100% { box-shadow: 0 0 5px var(--persona-color, #4f8ef7); }
+  50%       { box-shadow: 0 0 14px var(--persona-color, #4f8ef7); }
+}
+
+
+/* ── Content slot: shared space for info ↔ waveform ───────────────────── */
+
+.contentSlot {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  /* height is set inline from compact prop */
+}
+
+/* ── Info layer (name + role) — default visible ── */
+
+.infoLayer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+
+  /* Enter (from waveform → idle) */
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity  0.3s ease,
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+}
+
+.infoHidden {
+  opacity: 0;
+  transform: translateX(-14px);
+  pointer-events: none;
+}
+
+/* ── Waveform layer — default hidden, slides in when active ── */
+
+.waveformLayer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+
+  /* Default: hidden to the right */
+  opacity: 0;
+  transform: translateX(20px);
+  transition:
+    opacity  0.35s ease,
+    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.waveformVisible {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+
+/* ── Name / role ────────────────────────────────────────────────────────── */
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.emoji {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8eaf6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role {
+  font-size: 10px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--persona-color, #4f8ef7) 80%, #aaa);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+}
+
+
+/* ── Status badge ───────────────────────────────────────────────────────── */
+
+.statusBadge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #7a7f9a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+
+/* ── Response bubble ────────────────────────────────────────────────────── */
+
+.responseBubble {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 52px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.responseText {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #cdd0e8;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cursor {
+  display: inline-block;
+  color: var(--persona-color, #4f8ef7);
+  animation: blink 0.8s step-end infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.placeholder {
+  font-size: 12px;
+  color: #4a4e68;
+  margin: 0;
+  font-style: italic;
+}
+
+.errorText {
+  font-size: 12px;
+  color: #f87171;
+  margin: 0;
+}

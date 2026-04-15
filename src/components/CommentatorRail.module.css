@@ -1,0 +1,376 @@
+/* src/components/CommentatorRail.module.css */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Rail: full-screen fixed layer (pointer-events:none keeps content usable)
+   ───────────────────────────────────────────────────────────────────────── */
+
+.rail {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 200;
+}
+
+/* Invisible 48px hover strip at right edge */
+.hoverTrigger {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Column anchored to right edge, centered vertically */
+.cardsColumn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end; /* right-align every card */
+  padding: 24px 0;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Card track — the sliding wrapper. Off-screen right by default.
+   Because cards are right-aligned, translateX(calc(100%+24px)) pushes
+   them just off the right edge of the viewport.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.cardTrack {
+  pointer-events: none;
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  /* Quick disappear when returning to hidden */
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 1, 1),
+    opacity   0.2s ease;
+}
+
+/* ── Slide IN — spring with slight overshoot ── */
+.cardVisible {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    transform 0.62s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity   0.28s ease;
+}
+
+/* ── Slide OUT — smooth ease-in ── */
+.cardExiting {
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  transition:
+    transform 0.46s cubic-bezier(0.4, 0, 1, 1),
+    opacity   0.34s ease;
+}
+
+/* ── Peek — show full card on edge hover ── */
+.cardPeeking {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    transform 0.38s cubic-bezier(0.34, 1.4, 0.64, 1),
+    opacity   0.22s ease;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Unified card — glassmorphism panel, one piece (no inner animations)
+   ───────────────────────────────────────────────────────────────────────── */
+
+.card {
+  position: relative; /* needed for close button absolute positioning */
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  background: rgba(10, 10, 22, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px 4px 14px 14px;
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: visible; /* allow close btn to poke out */
+  /* persona-colour left border */
+  border-left: 3px solid var(--persona-color, #4f8ef7);
+  max-width: 380px;
+  min-width: 220px;
+}
+
+/* ── × dismiss button — top-right corner, appears on card hover ── */
+.closeBtn {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(20, 20, 36, 0.92);
+  color: #9ca3af;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+
+  /* Hidden by default, revealed when parent card is hovered */
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.15s ease, color 0.15s ease;
+  z-index: 10;
+}
+
+.card:hover .closeBtn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.closeBtn:hover {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Content column — name/role + response text
+   ───────────────────────────────────────────────────────────────────────── */
+
+.contentCol {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.personaName {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8eaf6;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.personaRole {
+  font-size: 10px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--persona-color, #4f8ef7) 75%, #aaa);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.responseText {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #cdd0e8;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.responseText::-webkit-scrollbar { display: none; }
+
+/* ── Citation chips ── */
+.citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.citationChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+
+.citationChip:hover {
+  background: rgba(var(--persona-color, #4f8ef7) / 0.18);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.citationFavicon {
+  border-radius: 2px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.citationDomain {
+  font-size: 9.5px;
+  color: #8b9eb8;
+  white-space: nowrap;
+  font-family: 'Space Grotesk', monospace;
+  letter-spacing: 0.01em;
+}
+
+.citationChip:hover .citationDomain {
+  color: #c5d3e8;
+}
+
+.cursor {
+  display: inline-block;
+  color: var(--persona-color, #4f8ef7);
+  animation: blink 0.8s step-end infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Avatar column — avatar pill on the left, waveform to its right
+   ───────────────────────────────────────────────────────────────────────── */
+
+.avatarCol {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0;
+  padding: 10px 8px 10px 6px;
+}
+
+/* ── Avatar ring ── */
+.avatarRing {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, var(--persona-color, #4f8ef7) 30%, transparent 100%);
+  transition: box-shadow 0.3s ease, background 0.3s ease;
+}
+
+.avatar {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.2), transparent 45%),
+    linear-gradient(135deg, color-mix(in srgb, var(--persona-color, #4f8ef7) 75%, #0f172a), #111827);
+}
+
+.avatarGlyph {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Status dot */
+.statusDot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3d4050;
+  border: 2px solid rgba(10, 10, 22, 0.9);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+/* Thinking: slow breath + glow */
+.avatarThinking {
+  animation: thinkingGlow 2.6s ease-in-out infinite;
+}
+
+.avatarThinking .avatar {
+  animation: thinkingBreath 2.6s ease-in-out infinite;
+}
+
+.dotThinking {
+  background: color-mix(in srgb, var(--persona-color, #4f8ef7) 60%, transparent);
+  animation: dotThinkPulse 2.6s ease-in-out infinite;
+}
+
+@keyframes thinkingGlow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 0 4px color-mix(in srgb, var(--persona-color, #4f8ef7) 18%, transparent); }
+}
+
+@keyframes thinkingBreath {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.03); }
+}
+
+@keyframes dotThinkPulse {
+  0%, 100% { box-shadow: 0 0 3px 0 color-mix(in srgb, var(--persona-color, #4f8ef7) 30%, transparent); }
+  50%       { box-shadow: 0 0 7px 1px color-mix(in srgb, var(--persona-color, #4f8ef7) 55%, transparent); }
+}
+
+/* Active/speaking */
+.avatarActive {
+  box-shadow: 0 0 18px color-mix(in srgb, var(--persona-color, #4f8ef7) 55%, transparent);
+  background: linear-gradient(135deg, var(--persona-color, #4f8ef7) 60%, transparent 100%);
+}
+
+.dotSpeaking {
+  background: var(--persona-color, #4f8ef7);
+  animation: dotSpeakPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dotSpeakPulse {
+  0%, 100% { box-shadow: 0 0 5px var(--persona-color, #4f8ef7); }
+  50%       { box-shadow: 0 0 12px var(--persona-color, #4f8ef7); }
+}
+
+
+/* ── Waveform slot — to the RIGHT of the avatar ── */
+
+.waveSlot {
+  flex-shrink: 0;
+  width: 80px;
+  margin-left: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+}
+
+/* Invisible placeholder so width doesn't shift when wave appears/disappears */
+.wavePlaceholder {
+  flex-shrink: 0;
+  width: 80px;
+  margin-left: 8px;
+}
