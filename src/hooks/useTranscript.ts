@@ -3,19 +3,18 @@
 //
 // TRANSCRIPTION STRATEGY (priority order):
 //
-// 1. Gemini Audio (when apiKey is set) — MediaRecorder → base64 chunks → Gemini API
-//    - Reliable, works on any browser, doesn't touch Google Speech API
-//    - ~5-second chunk latency inherent to chunked recording
+// 1. ElevenLabs (when elevenLabsKey is set) — MediaRecorder → ElevenLabs API
+//    - Most accurate, works on any browser
+//    - ~3-second chunk latency
 //
-// 2. Web Speech API fallback (when no apiKey) — Chrome-only, free
+// 2. Web Speech API fallback (when no elevenLabsKey) — Chrome/Edge only, free
 //    - Sends audio directly to Google's cloud speech servers
-//    - Notorious "network" error when Chrome can't reach those servers
+//    - Only works for mic source (no stream/screen support)
 //
-// Stream URL mode always uses Gemini (requires apiKey).
+// Stream URL and Screen Capture modes require an ElevenLabs key.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AudioSource, TranscriptChunk } from '@/types';
-import { transcribeWithGemini } from '@/lib/gemini';
 import { transcribeWithElevenLabs } from '@/lib/elevenlabs';
 
 // ── Web Speech API types ───────────────────────────────────────────────────
@@ -47,11 +46,11 @@ const FATAL_SPEECH_ERRORS = new Set([
 ]);
 
 const SPEECH_ERROR_MESSAGES: Record<string, string> = {
-  'network': 'Web Speech API couldn\'t reach Google\'s servers. Add a Gemini API key in Settings to use Gemini transcription instead (more reliable).',
-  'not-allowed': 'Microphone access denied. Click the padlock icon in Chrome\'s address bar and allow microphone.',
+  'network': 'Web Speech API couldn\'t reach Google\'s servers. Add an ElevenLabs API key in Settings for reliable transcription.',
+  'not-allowed': 'Microphone access denied. Click the padlock icon in your browser\'s address bar and allow microphone access.',
   'audio-capture': 'No microphone found. Plug in a mic or check System Settings → Sound.',
   'no-speech': 'No speech detected.',
-  'service-not-allowed': 'Chrome blocked the speech service.',
+  'service-not-allowed': 'Your browser blocked the speech service.',
 };
 
 interface UseTranscriptOptions {
@@ -68,7 +67,7 @@ interface UseTranscriptReturn {
   interimText: string;
   isListening: boolean;
   recognitionError: string | null;
-  transcriptionEngine: 'elevenlabs' | 'gemini' | 'webspeech' | 'none';
+  transcriptionEngine: 'elevenlabs' | 'webspeech' | 'none';
   startListening: () => void;
   stopListening: () => void;
   clearTranscript: () => void;
@@ -79,7 +78,7 @@ interface UseTranscriptReturn {
 export function useTranscript({
   source,
   streamAudioRef,
-  apiKey,
+  apiKey: _apiKey, // retained in props for backwards compat but not used for transcription
   elevenLabsKey,
   onChunkCommitted,
   onPreviewStreamReady,
@@ -97,13 +96,12 @@ export function useTranscript({
   const chunksRef = useRef<TranscriptChunk[]>([]);
   const fatalErrorRef = useRef(false);
   const activeStreamRef = useRef<MediaStream | null>(null);
-  // Stable ref so startScreenListening can call stop without a circular dep
   const stopListeningRef = useRef<() => void>(() => {});
 
-  // Engine priority: ElevenLabs > Gemini > Web Speech
+  // Engine: ElevenLabs > Web Speech (for mic only)
   const transcriptionEngine: UseTranscriptReturn['transcriptionEngine'] =
     isListening
-      ? (elevenLabsKey ? 'elevenlabs' : apiKey ? 'gemini' : (source === 'stream' || source === 'screen' ? 'none' : 'webspeech'))
+      ? (elevenLabsKey ? 'elevenlabs' : (source === 'mic' ? 'webspeech' : 'none'))
       : 'none';
 
   useEffect(() => { chunksRef.current = chunks; }, [chunks]);
@@ -149,10 +147,8 @@ export function useTranscript({
     });
   }, [onChunkCommitted]);
 
-  // ── Strategy A: ElevenLabs / Gemini audio transcription (preferred) ─────
-  // Picks ElevenLabs when its key is set, otherwise falls back to Gemini.
-  // Uses MediaRecorder with 3-second chunks for low latency.
-  const startGeminiMicListening = useCallback(async () => {
+  // ── Strategy A: ElevenLabs chunked transcription (mic / camera) ─────────
+  const startElevenLabsMicListening = useCallback(async () => {
     setRecognitionError(null);
     fatalErrorRef.current = false;
 
@@ -188,11 +184,7 @@ export function useTranscript({
       audioChunks.length = 0;
 
       try {
-        // ElevenLabs takes priority — it's significantly more accurate than Gemini
-        const text = elevenLabsKey
-          ? await transcribeWithElevenLabs(blob, elevenLabsKey)
-          : await transcribeWithGemini(blob, apiKey);
-
+        const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
         const ignore = ['there is no speech.', '[silence]', '[music]', ''];
         if (text && !ignore.includes(text.toLowerCase().trim())) {
           commitChunk(text);
@@ -210,7 +202,6 @@ export function useTranscript({
       }
     };
 
-    // 3-second chunks — lower latency than 5s, still enough audio for context
     const slice = () => {
       if (fatalErrorRef.current) return;
       if (recorder.state === 'recording') {
@@ -224,16 +215,16 @@ export function useTranscript({
 
     recorder.start();
     mediaRecorderRef.current = recorder;
-  }, [apiKey, elevenLabsKey, commitChunk, startMicLevelMonitor]);
+  }, [elevenLabsKey, commitChunk, startMicLevelMonitor]);
 
-  // ── Strategy B: Web Speech API fallback ────────────────────────────────
+  // ── Strategy B: Web Speech API (mic only, no key required) ─────────────
   const startWebSpeechListening = useCallback(async () => {
     const SpeechRecognitionCtor: (new () => ISpeechRecognition) | undefined =
       window.webkitSpeechRecognition || window.SpeechRecognition;
 
     if (!SpeechRecognitionCtor) {
       setRecognitionError(
-        'Speech recognition is not supported in this browser. Use Chrome/Edge, or add a Gemini API key for reliable transcription.'
+        'Speech recognition is not supported in this browser. Use Chrome or Edge, or add an ElevenLabs API key for reliable transcription.'
       );
       setIsListening(false);
       return;
@@ -294,15 +285,15 @@ export function useTranscript({
     recognitionRef.current = rec;
   }, [commitChunk, startMicLevelMonitor, stopMicLevelMonitor]);
 
-  // ── Strategy C: Stream URL → ElevenLabs / Gemini transcription ────────────
+  // ── Strategy C: Stream URL → ElevenLabs transcription ───────────────────
   const startStreamListening = useCallback(async () => {
     const audioEl = streamAudioRef?.current;
     if (!audioEl) {
       setRecognitionError('No audio loaded. Paste a stream URL and click Load first.');
       return;
     }
-    if (!elevenLabsKey && !apiKey) {
-      setRecognitionError('An ElevenLabs or Gemini API key is required for stream transcription. Open Settings to add one.');
+    if (!elevenLabsKey) {
+      setRecognitionError('An ElevenLabs API key is required for stream transcription. Open Settings to add one.');
       return;
     }
 
@@ -332,9 +323,7 @@ export function useTranscript({
         const blob = new Blob(audioChunks, { type: mimeType });
         audioChunks.length = 0;
         try {
-          const text = elevenLabsKey
-            ? await transcribeWithElevenLabs(blob, elevenLabsKey)
-            : await transcribeWithGemini(blob, apiKey);
+          const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
           const ignore = ['there is no speech.', '[silence]', '[music]', ''];
           if (text && !ignore.includes(text.toLowerCase().trim())) commitChunk(text);
         } catch (err) {
@@ -355,14 +344,12 @@ export function useTranscript({
     } catch (err) {
       setRecognitionError(`Could not capture stream audio: ${(err as Error).message}`);
     }
-  }, [streamAudioRef, apiKey, elevenLabsKey, commitChunk]);
+  }, [streamAudioRef, elevenLabsKey, commitChunk]);
 
-  // ── Strategy D: Screen Capture (system audio + mic mixed) ────────────────
-  // Uses getDisplayMedia for screen/system audio, getUserMedia for mic,
-  // combines both via AudioContext, then chunks into 3s blobs for transcription.
+  // ── Strategy D: Screen Capture → ElevenLabs transcription ───────────────
   const startScreenListening = useCallback(async () => {
-    if (!elevenLabsKey && !apiKey) {
-      setRecognitionError('A Gemini or ElevenLabs API key is required for screen capture transcription. Open Settings to add one.');
+    if (!elevenLabsKey) {
+      setRecognitionError('An ElevenLabs API key is required for screen capture transcription. Open Settings to add one.');
       setIsListening(false);
       return;
     }
@@ -374,7 +361,7 @@ export function useTranscript({
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,   // required by most browsers even if we only want audio
-        audio: {       // system/tab audio — user must tick "Share system audio" in the picker
+        audio: {       // system/tab audio
           echoCancellation: false,
           noiseSuppression: false,
           sampleRate: 44100,
@@ -393,18 +380,17 @@ export function useTranscript({
       if (!fatalErrorRef.current) stopListeningRef.current();
     });
 
-    // Grab mic audio separately so we always have the host's voice
+    // Grab mic audio separately
     let micStream: MediaStream | null = null;
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       activeStreamRef.current = micStream;
       startMicLevelMonitor(micStream);
     } catch {
-      // Mic access denied — continue with screen audio only
       console.warn('[Screen] Mic access denied — transcribing system audio only.');
     }
 
-    // Mix screen audio + mic audio through AudioContext
+    // Mix screen audio + mic audio
     const audioCtx = new AudioContext();
     const dest = audioCtx.createMediaStreamDestination();
 
@@ -413,7 +399,7 @@ export function useTranscript({
       const screenOnlyStream = new MediaStream(screenAudioTracks);
       audioCtx.createMediaStreamSource(screenOnlyStream).connect(dest);
     } else {
-      console.warn('[Screen] No system audio track found — the user may not have ticked "Share system audio".');
+      console.warn('[Screen] No system audio track — user may not have ticked "Share system audio".');
     }
 
     if (micStream) {
@@ -440,9 +426,7 @@ export function useTranscript({
       audioChunks.length = 0;
 
       try {
-        const text = elevenLabsKey
-          ? await transcribeWithElevenLabs(blob, elevenLabsKey)
-          : await transcribeWithGemini(blob, apiKey);
+        const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
         const ignore = ['there is no speech.', '[silence]', '[music]', ''];
         if (text && !ignore.includes(text.toLowerCase().trim())) {
           commitChunk(text);
@@ -470,12 +454,11 @@ export function useTranscript({
 
     const interval = setInterval(slice, 3000);
     (recorder as MediaRecorder & { _interval?: ReturnType<typeof setInterval> })._interval = interval;
-    // Stash screen stream so stopListening() can close its tracks
     (recorder as MediaRecorder & { _screenStream?: MediaStream })._screenStream = screenStream;
 
     recorder.start();
     mediaRecorderRef.current = recorder;
-  }, [apiKey, elevenLabsKey, commitChunk, onPreviewStreamReady, startMicLevelMonitor]);
+  }, [elevenLabsKey, commitChunk, onPreviewStreamReady, startMicLevelMonitor]);
 
   // ── Public API ──────────────────────────────────────────────────────────
   const startListening = useCallback(() => {
@@ -486,14 +469,14 @@ export function useTranscript({
       startStreamListening();
     } else if (source === 'screen') {
       startScreenListening();
-    } else if (elevenLabsKey || apiKey) {
-      // ElevenLabs or Gemini chunked transcription (reliable, works on all browsers)
-      startGeminiMicListening();
+    } else if (elevenLabsKey) {
+      // ElevenLabs chunked transcription — most accurate
+      startElevenLabsMicListening();
     } else {
-      // Fallback to Web Speech API (free, Chrome only)
+      // Fallback: Web Speech API (free, Chrome/Edge only)
       startWebSpeechListening();
     }
-  }, [source, elevenLabsKey, apiKey, startGeminiMicListening, startWebSpeechListening, startStreamListening, startScreenListening]);
+  }, [source, elevenLabsKey, startElevenLabsMicListening, startWebSpeechListening, startStreamListening, startScreenListening]);
 
   const stopListening = useCallback(() => {
     setIsListening(false);

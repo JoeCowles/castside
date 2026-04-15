@@ -1,5 +1,5 @@
 'use client';
-// src/app/page.tsx
+// src/app/app/page.tsx
 // podcommentators main page — orchestrates audio/video sources, transcript, and AI persona sidebar.
 
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -103,6 +103,9 @@ export default function Home() {
   const hasApiKey = Boolean(settings.apiKey);
   const hasVideo = Boolean(previewStream) || isVideoStream;
 
+  // Transcript is only shown in mic mode while actively listening
+  const showTranscript = source === 'mic' && isListening;
+
   return (
     <div className={styles.app}>
       {/* ── Top Bar ── */}
@@ -171,20 +174,20 @@ export default function Home() {
             />
           </div>
         ) : (
-          /* ── AUDIO MODE: left panel + optional sidebar ── */
-          <>
-            <section className={styles.mainPanel}>
-              {!hasApiKey && (
-                <div className={styles.apiBanner}>
-                  <AlertTriangle size={16} />
-                  <span>
-                    Add your Gemini API key in{' '}
-                    <button className={styles.bannerBtn} onClick={() => setSettingsOpen(true)}>Settings</button>
-                    {' '}to enable AI personas.
-                  </span>
-                </div>
-              )}
+          /* ── AUDIO MODE ── */
+          <section className={styles.mainPanel}>
+            {!hasApiKey && (
+              <div className={styles.apiBanner}>
+                <AlertTriangle size={16} />
+                <span>
+                  Add your Gemini API key in{' '}
+                  <button className={styles.bannerBtn} onClick={() => setSettingsOpen(true)}>Settings</button>
+                  {' '}to enable AI personas.
+                </span>
+              </div>
+            )}
 
+            <div className={[styles.contentArea, showTranscript ? styles.contentAreaWithTranscript : ''].join(' ')}>
               <AudioSourcePanel
                 source={source}
                 onSourceChange={(s) => { stopListening(); setPreviewStream(null); setIsVideoStream(false); setSource(s); }}
@@ -198,14 +201,18 @@ export default function Home() {
                 onStreamUrlChange={handleStreamUrlChange}
               />
 
-              <TranscriptPanel
-                chunks={chunks}
-                interimText={interimText}
-                isListening={isListening}
-                onClear={clearTranscript}
-              />
-            </section>
-          </>
+              {showTranscript && (
+                <div className={styles.transcriptArea}>
+                  <TranscriptPanel
+                    chunks={chunks}
+                    interimText={interimText}
+                    isListening={isListening}
+                    onClear={clearTranscript}
+                  />
+                </div>
+              )}
+            </div>
+          </section>
         )}
       </main>
 

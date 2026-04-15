@@ -177,6 +177,39 @@
   overflow: hidden;
 }
 
+/* ── Content area: source panel [+ transcript] ── */
+
+.contentArea {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.contentAreaWithTranscript {
+  gap: 16px;
+}
+
+.contentArea > :first-child {
+  flex: 1 1 45%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.transcriptArea {
+  flex: 1 1 55%;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.22s ease;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 /* ── API banner ── */
 
 .apiBanner {

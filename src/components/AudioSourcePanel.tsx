@@ -1,6 +1,5 @@
 'use client';
 // src/components/AudioSourcePanel.tsx
-// Source selector: Microphone (audio only), Camera (audio+video), or Stream URL (audio or video).
 
 import { useState } from 'react';
 import { AudioSource } from '@/types';
@@ -15,11 +14,18 @@ interface AudioSourcePanelProps {
   onToggleListening: () => void;
   micLevel: number;
   recognitionError: string | null;
-  transcriptionEngine: 'elevenlabs' | 'gemini' | 'webspeech' | 'none';
+  transcriptionEngine: 'elevenlabs' | 'webspeech' | 'none';
   streamAudioRef: React.RefObject<HTMLAudioElement | null>;
   onVideoStreamReady: (stream: MediaStream | null) => void;
   onStreamUrlChange: (url: string, isVideo: boolean) => void;
 }
+
+const SOURCES: { id: AudioSource; label: string; description: string; icon: React.ReactNode }[] = [
+  { id: 'mic',    label: 'Microphone',  description: 'Capture from your mic or virtual audio cable', icon: <Mic size={28} /> },
+  { id: 'camera', label: 'Camera',      description: 'Live camera + OBS Virtual Camera support',     icon: <Camera size={28} /> },
+  { id: 'stream', label: 'Stream URL',  description: 'Load an HLS, MP4, or HTTP audio stream',       icon: <Radio size={28} /> },
+  { id: 'screen', label: 'Screen',      description: 'Capture system audio and mic together',        icon: <Monitor size={28} /> },
+];
 
 export default function AudioSourcePanel({
   source,
@@ -44,10 +50,6 @@ export default function AudioSourcePanel({
     setStreamError('');
   };
 
-  const StatusDot = ({ color }: { color: string }) => (
-    <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: color, marginRight: '6px', verticalAlign: 'middle', boxShadow: `0 0 8px ${color}80` }} />
-  );
-
   const handleLoadStream = () => {
     const el = streamAudioRef.current;
     if (!el || !streamUrl.trim()) return;
@@ -67,26 +69,28 @@ export default function AudioSourcePanel({
     onStreamUrlChange(url, isVideo);
   };
 
+  const EngineLabel = () => {
+    const dot = (color: string) => (
+      <span className={styles.engineDot} style={{ background: color, boxShadow: `0 0 8px ${color}80` }} />
+    );
+    if (transcriptionEngine === 'elevenlabs') return <>{dot('#34d399')} ElevenLabs</>;
+    if (transcriptionEngine === 'webspeech')  return <>{dot('#60A5FA')} Web Speech</>;
+    if (source === 'mic' || source === 'camera') return <>{dot('#F59E0B')} No API Key</>;
+    return <>{dot('#9CA3AF')} Idle</>;
+  };
+
   return (
     <div className={styles.panel}>
-      <div className={styles.panelHeader}>
-        <h2 className={styles.title}>Source</h2>
-        <span className={styles.engineBadge}>
-          {transcriptionEngine === 'elevenlabs' && <><StatusDot color="#34d399" /> ElevenLabs</>}
-          {transcriptionEngine === 'gemini' && <><StatusDot color="#34d399" /> Gemini</>}
-          {transcriptionEngine === 'webspeech' && <><StatusDot color="#60A5FA" /> Web Speech</>}
-          {transcriptionEngine === 'none' && (
-            (source === 'mic' || source === 'camera')
-              ? <><StatusDot color="#F59E0B" /> No API Key</>
-              : <><StatusDot color="#9CA3AF" /> Idle</>
-          )}
-        </span>
+      {/* Status row */}
+      <div className={styles.statusRow}>
+        <span className={styles.sectionLabel}>Input Source</span>
+        <span className={styles.engineBadge}><EngineLabel /></span>
       </div>
 
-      {/* Recognition error banner */}
+      {/* Error banner */}
       {recognitionError && (
         <div className={styles.errorBanner}>
-          <AlertTriangle className={styles.errorIcon} size={20} />
+          <AlertTriangle className={styles.errorIcon} size={18} />
           <div>
             <strong>Speech Error</strong>
             <p>{recognitionError}</p>
@@ -94,44 +98,30 @@ export default function AudioSourcePanel({
         </div>
       )}
 
-      {/* Source tabs */}
-      <div className={styles.tabs}>
-        <button
-          className={[styles.tab, source === 'mic' ? styles.tabActive : ''].join(' ')}
-          onClick={() => handleSourceChange('mic')}
-          id="tab-mic"
-        >
-          <Mic size={16} /> Mic
-        </button>
-        <button
-          className={[styles.tab, source === 'camera' ? styles.tabActive : ''].join(' ')}
-          onClick={() => handleSourceChange('camera')}
-          id="tab-camera"
-        >
-          <Camera size={16} /> Camera
-        </button>
-        <button
-          className={[styles.tab, source === 'stream' ? styles.tabActive : ''].join(' ')}
-          onClick={() => handleSourceChange('stream')}
-          id="tab-stream"
-        >
-          <Radio size={16} /> Stream URL
-        </button>
-        <button
-          className={[styles.tab, source === 'screen' ? styles.tabActive : ''].join(' ')}
-          onClick={() => handleSourceChange('screen')}
-          id="tab-screen"
-        >
-          <Monitor size={16} /> Screen
-        </button>
+      {/* Source card grid */}
+      <div className={styles.sourceGrid}>
+        {SOURCES.map((s) => {
+          const active = source === s.id;
+          return (
+            <button
+              key={s.id}
+              className={[styles.sourceCard, active ? styles.sourceCardActive : ''].join(' ')}
+              onClick={() => handleSourceChange(s.id)}
+              id={`tab-${s.id}`}
+            >
+              <span className={styles.sourceIcon}>{s.icon}</span>
+              <span className={styles.sourceLabel}>{s.label}</span>
+              <span className={styles.sourceDesc}>{s.description}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Mic panel */}
+      {/* ── Config panel for selected source ── */}
+
+      {/* Mic */}
       {source === 'mic' && (
-        <div className={styles.sourceBody}>
-          <p className={styles.hint}>
-            Capture audio from your microphone or any virtual audio cable.
-          </p>
+        <div className={styles.configPanel}>
           <div className={styles.micRow}>
             <button
               className={[styles.listenBtn, isListening ? styles.listenBtnActive : ''].join(' ')}
@@ -139,7 +129,7 @@ export default function AudioSourcePanel({
               id="btn-listen-mic"
             >
               {isListening ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-              {isListening ? 'Stop' : 'Start Listening'}
+              {isListening ? 'Stop Listening' : 'Start Listening'}
             </button>
             <div className={styles.micBar}>
               <div className={styles.micBarFill} style={{ width: `${micLevel * 100}%` }} />
@@ -148,21 +138,15 @@ export default function AudioSourcePanel({
         </div>
       )}
 
-      {/* Camera panel */}
+      {/* Camera */}
       {source === 'camera' && (
-        <div className={styles.sourceBody}>
+        <div className={styles.configPanel}>
           <div className={styles.obsCallout}>
-            <Video className={styles.obsIcon} size={24} />
+            <Video className={styles.obsIcon} size={20} />
             <div>
-              <strong>OBS Virtual Camera</strong> — in OBS go to{' '}
-              <code>Tools → Virtual Camera → Start Virtual Camera</code>, then click Start below
-              and select <em>OBS Virtual Camera</em>.
+              <strong>OBS Virtual Camera</strong> — Go to <code>Tools → Virtual Camera → Start Virtual Camera</code>, then click Start and select <em>OBS Virtual Camera</em>.
             </div>
           </div>
-          <p className={styles.hint}>
-            Video appears as the main stream view. For audio transcription you&apos;ll also need a
-            virtual audio cable (see setup guide below).
-          </p>
           <div className={styles.micRow}>
             <button
               className={[styles.listenBtn, isListening ? styles.listenBtnActive : ''].join(' ')}
@@ -179,21 +163,15 @@ export default function AudioSourcePanel({
         </div>
       )}
 
-      {/* Stream URL panel */}
+      {/* Stream URL */}
       {source === 'stream' && (
-        <div className={styles.sourceBody}>
+        <div className={styles.configPanel}>
           <div className={styles.obsCallout}>
-            <Radio className={styles.obsIcon} size={24} />
+            <Radio className={styles.obsIcon} size={20} />
             <div>
-              <strong>OBS → Local HLS:</strong> Stream OBS to{' '}
-              <code>rtmp://127.0.0.1/mystream</code> via MediaMTX, then paste{' '}
-              <code>http://localhost:8888/mystream/index.m3u8</code> below.
+              <strong>OBS → Local HLS:</strong> Stream to <code>rtmp://127.0.0.1/mystream</code> via MediaMTX, then paste <code>http://localhost:8888/mystream/index.m3u8</code> below.
             </div>
           </div>
-          <p className={styles.hint}>
-            Supports MP3, MP4, HLS (.m3u8), and most HTTP streams. Video streams display
-            in the main view.
-          </p>
           <div className={styles.urlRow}>
             <input
               type="url"
@@ -209,11 +187,7 @@ export default function AudioSourcePanel({
             </button>
           </div>
           {streamError && <p className={styles.streamError}>{streamError}</p>}
-          <audio
-            ref={streamAudioRef as React.RefObject<HTMLAudioElement>}
-            className={styles.hiddenAudio}
-            id="audio-player"
-          />
+          <audio ref={streamAudioRef as React.RefObject<HTMLAudioElement>} className={styles.hiddenAudio} id="audio-player" />
           {streamLoaded && (
             <button
               className={[styles.listenBtn, isListening ? styles.listenBtnActive : ''].join(' ')}
@@ -227,22 +201,15 @@ export default function AudioSourcePanel({
         </div>
       )}
 
-      {/* Screen capture panel */}
+      {/* Screen */}
       {source === 'screen' && (
-        <div className={styles.sourceBody}>
+        <div className={styles.configPanel}>
           <div className={styles.obsCallout}>
-            <Monitor className={styles.obsIcon} size={24} />
+            <Monitor className={styles.obsIcon} size={20} />
             <div>
-              <strong>Screen Capture</strong> — captures your screen&apos;s system audio plus your microphone and combines both for transcription.
-              When the browser picker opens, make sure to tick{' '}
-              <strong>Share system audio</strong> / <em>Share tab audio</em> to include
-              what&apos;s playing on your device.
+              <strong>Screen Capture</strong> — When the browser picker opens, tick <strong>Share system audio</strong> to include audio playing on your device.
             </div>
           </div>
-          <p className={styles.hint}>
-            Works best in Chrome. Firefox does not support system audio capture.
-            Your mic is always mixed in even if system audio is unavailable.
-          </p>
           <div className={styles.micRow}>
             <button
               className={[styles.listenBtn, isListening ? styles.listenBtnActive : ''].join(' ')}
@@ -259,7 +226,7 @@ export default function AudioSourcePanel({
         </div>
       )}
 
-      {/* ── OBS Setup Guide ── */}
+      {/* OBS Setup Guide */}
       <div className={styles.guideWrap}>
         <OBSSetupGuide />
       </div>
