@@ -325,7 +325,7 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
           <div className={styles.group}>
             <label className={styles.label}>YouTube Live</label>
             <p className={styles.hint}>
-              CastSide can now save your YouTube ingest details and jump you into Live Control Room.
+              podcommentators can now save your YouTube ingest details and jump you into Live Control Room.
               Actual RTMPS publishing still needs an encoder/relay layer, because this app runs entirely in the browser.
             </p>
             <div className={styles.inputRow}>

@@ -1,6 +1,6 @@
-# CastSide
+# podcommentators
 
-CastSide is a browser-based AI commentary companion for live audio and video. It can listen to your microphone, camera, screen share, or a local/remote stream URL, transcribe the audio in real time, and let a configurable cast of AI commentators react live in an overlay.
+podcommentators is a browser-based AI commentary companion for live audio and video. It can listen to your microphone, camera, screen share, or a local/remote stream URL, transcribe the audio in real time, and let a configurable cast of AI commentators react live in an overlay.
 
 The app is built with Next.js, React, and TypeScript, and runs fully on the client. Your keys and commentator settings are stored in browser localStorage.
 
@@ -32,7 +32,7 @@ The app is built with Next.js, React, and TypeScript, and runs fully on the clie
 
 ## Current Status
 
-CastSide is ready for local use and repo publishing.
+podcommentators is ready for local use and repo publishing.
 
 Implemented:
 
@@ -64,8 +64,8 @@ Optional accounts and keys:
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/castside.git
-cd castside
+git clone https://github.com/YOUR_USERNAME/podcommentators.git
+cd podcommentators
 npm install
 npm run dev
 ```
@@ -145,7 +145,7 @@ When video is active through:
 - screen share
 - video stream URL
 
-CastSide hides:
+podcommentators hides:
 
 - the source panel
 - the transcript panel
@@ -217,28 +217,28 @@ That is convenient for local use, but it also means:
 
 ## OBS and Streaming Software
 
-CastSide includes an OBS setup guide in the UI. There are two main workflows.
+podcommentators includes an OBS setup guide in the UI. There are two main workflows.
 
 ### OBS Virtual Camera
 
-Use this when you want OBS output to appear as a webcam inside CastSide.
+Use this when you want OBS output to appear as a webcam inside podcommentators.
 
 High-level flow:
 
 1. Start `Virtual Camera` in OBS.
-2. In CastSide, choose `Camera`.
+2. In podcommentators, choose `Camera`.
 3. Start camera and select `OBS Virtual Camera`.
 4. Route audio separately with a virtual audio device if needed.
 
 ### Local HLS via MediaMTX
 
-Use this when you want OBS to publish to a local RTMP server and CastSide to load the resulting HLS URL.
+Use this when you want OBS to publish to a local RTMP server and podcommentators to load the resulting HLS URL.
 
 High-level flow:
 
 1. Run MediaMTX locally.
 2. Point OBS to the local RTMP endpoint.
-3. Load the HLS URL in CastSide as a stream URL.
+3. Load the HLS URL in podcommentators as a stream URL.
 
 This is often the best local setup for full video + audio capture without relying on virtual camera behavior.
 
@@ -249,7 +249,7 @@ The settings screen includes fields for:
 - YouTube ingest URL
 - YouTube stream key
 
-This currently helps you store your destination details and jump into YouTube Live Control Room, but CastSide does not yet push the stream to YouTube directly.
+This currently helps you store your destination details and jump into YouTube Live Control Room, but podcommentators does not yet push the stream to YouTube directly.
 
 To support direct YouTube publishing, the project would need one of these:
 

@@ -61,7 +61,7 @@ export default function OBSSetupGuide() {
                 <li>
                   <span className={styles.stepNum}>2</span>
                   <div>
-                    <strong>In CastSide:</strong> Click the <strong>📷 Camera</strong> tab above and
+                    <strong>In podcommentators:</strong> Click the <strong>📷 Camera</strong> tab above and
                     hit <strong>Start Camera</strong>. Select <em>OBS Virtual Camera</em> when the
                     browser asks which camera to use.
                   </div>
@@ -140,7 +140,7 @@ export default function OBSSetupGuide() {
                 <li>
                   <span className={styles.stepNum}>3</span>
                   <div>
-                    <strong>In CastSide</strong>, go to the <strong>📡 Stream URL</strong> tab and paste:
+                    <strong>In podcommentators</strong>, go to the <strong>📡 Stream URL</strong> tab and paste:
                     <div className={[styles.codeBlock, styles.codeUrl].join(' ')}>
                       http://localhost:8888/mystream/index.m3u8
                     </div>

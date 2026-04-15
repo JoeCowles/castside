@@ -4,7 +4,7 @@
 import { AppSettings, Persona } from '@/types';
 import { DEFAULT_PERSONAS, makeDefaultPersonas } from '@/lib/personas';
 
-const STORAGE_KEY = 'castside_settings';
+const STORAGE_KEY = 'podcommentators_settings';
 const listeners = new Set<() => void>();
 let cachedRawSettings: string | null | undefined;
 let cachedSettingsSnapshot: AppSettings | null = null;

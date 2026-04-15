@@ -12,14 +12,14 @@ const inter = Inter({
 
 // Space Grotesk via Google Fonts CDN (loaded in globals.css)
 const metadata_description =
-  'CastSide — Real-time AI commentary for any podcast or video stream, powered by five distinct AI personas.';
+  'podcommentators — Real-time AI commentary for any podcast or video stream, powered by five distinct AI personas.';
 
 export const metadata: Metadata = {
-  title: 'CastSide — AI Podcast & Video Companion',
+  title: 'podcommentators — AI Podcast & Video Companion',
   description: metadata_description,
   keywords: ['podcast', 'AI', 'real-time', 'transcription', 'commentary', 'video', 'streaming'],
   openGraph: {
-    title: 'CastSide — AI Podcast & Video Companion',
+    title: 'podcommentators — AI Podcast & Video Companion',
     description: metadata_description,
     type: 'website',
   },

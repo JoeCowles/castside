@@ -1,6 +1,6 @@
 'use client';
 // src/app/page.tsx
-// CastSide main page — orchestrates audio/video sources, transcript, and AI persona sidebar.
+// podcommentators main page — orchestrates audio/video sources, transcript, and AI persona sidebar.
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { AppMode, AudioSource } from '@/types';
@@ -109,7 +109,7 @@ export default function Home() {
         <div className={styles.topbarLeft}>
           <div className={styles.logo}>
             <span className={styles.logoIcon}>🎙️</span>
-            <span className={styles.logoText}>CastSide</span>
+            <span className={styles.logoText}>podcommentators</span>
             <span className={styles.logoBadge}>AI</span>
           </div>
 

@@ -1,5 +1,5 @@
 // src/types/index.ts
-// Central type definitions for CastSide
+// Central type definitions for podcommentators
 
 export type PersonaId = string;
 
