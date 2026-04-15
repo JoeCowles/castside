@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Citation, Persona, PersonaState } from '@/types';
 import WaveformCanvas from './WaveformCanvas';
+import { IconResolver } from './IconResolver';
 import styles from './CommentatorRail.module.css';
 
 const DISMISS_DELAY_MS = 30_000;
@@ -175,7 +176,9 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
                 {/* Left column: name/role + response text */}
                 <div className={styles.contentCol}>
                   <div className={styles.identity}>
-                    <span className={styles.personaName}>{persona.icon} {persona.name}</span>
+                    <span className={styles.personaName}>
+                      <IconResolver name={persona.icon} size={16} /> {persona.name}
+                    </span>
                     <span className={styles.personaRole}>{persona.role}</span>
                   </div>
 
@@ -226,7 +229,7 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
                     isActive   ? styles.avatarActive   : '',
                   ].filter(Boolean).join(' ')}>
                     <div className={styles.avatar} aria-hidden="true">
-                      <span className={styles.avatarGlyph}>{persona.icon}</span>
+                      <IconResolver name={persona.icon} size={24} className={styles.avatarGlyph} />
                     </div>
                     <span className={[
                       styles.statusDot,

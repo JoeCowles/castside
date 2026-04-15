@@ -6,6 +6,7 @@ import { AppSettings, Persona } from '@/types';
 import { createEmptyPersona } from '@/lib/personas';
 import { validateGeminiKey } from '@/lib/gemini';
 import { useSettings } from '@/context/SettingsContext';
+import { Settings, Eye, EyeOff, Plus, Copy, Trash, X } from 'lucide-react';
 import styles from './SettingsModal.module.css';
 
 interface SettingsModalProps {
@@ -110,8 +111,8 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
     <div className={styles.backdrop} onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Settings">
       <div className={styles.modal}>
         <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>⚙️ Settings</h2>
-          <button className={styles.closeBtn} onClick={onClose} aria-label="Close settings">✕</button>
+          <h2 className={styles.modalTitle}><Settings size={20} /> Settings</h2>
+          <button className={styles.closeBtn} onClick={onClose} aria-label="Close settings"><X size={20} /></button>
         </div>
 
         <div className={styles.modalBody}>
@@ -135,7 +136,7 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
                 onClick={() => setShowGeminiKey((value) => !value)}
                 aria-label={showGeminiKey ? 'Hide key' : 'Show key'}
               >
-                {showGeminiKey ? '🙈' : '👁️'}
+                {showGeminiKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
             <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className={styles.link}>
@@ -207,7 +208,7 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
                 <label className={styles.label}>Commentators</label>
                 <p className={styles.hint}>Create, edit, duplicate, disable, and delete commentators without touching code.</p>
               </div>
-              <button className={styles.addBtn} onClick={handleAddPersona}>+ Add</button>
+              <button className={styles.addBtn} onClick={handleAddPersona}><Plus size={16} /> Add</button>
             </div>
 
             <div className={styles.commentatorEditor}>
@@ -348,7 +349,7 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
                 placeholder="YouTube stream key"
               />
               <button className={styles.iconBtn} onClick={() => setShowYoutubeKey((value) => !value)} type="button">
-                {showYoutubeKey ? '🙈' : '👁️'}
+                {showYoutubeKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>

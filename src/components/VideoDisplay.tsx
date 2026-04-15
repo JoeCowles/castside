@@ -4,6 +4,7 @@
 // Persona commentary is handled globally by CommentatorRail (position: fixed overlay).
 
 import { useEffect, useRef } from 'react';
+import { Monitor, Camera, Radio } from 'lucide-react';
 import styles from './VideoDisplay.module.css';
 
 interface VideoDisplayProps {
@@ -42,7 +43,12 @@ export default function VideoDisplay({
 
   const hasLiveStream = Boolean(mediaStream);
   const hasVideo = hasLiveStream || hasStreamUrlVideo;
-  const label = source === 'screen' ? '🖥️ Screen' : hasLiveStream ? '📷 Camera' : '📡 Stream';
+
+  const getLabel = () => {
+    if (source === 'screen') return <><Monitor size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Screen</>;
+    if (hasLiveStream) return <><Camera size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Camera</>;
+    return <><Radio size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Stream</>;
+  };
 
   if (!hasVideo) return null;
 
@@ -71,7 +77,7 @@ export default function VideoDisplay({
 
       {/* Overlay badge */}
       <div className={styles.badge}>
-        {label}
+        {getLabel()}
         {isListening && <span className={styles.liveDot} />}
       </div>
     </div>

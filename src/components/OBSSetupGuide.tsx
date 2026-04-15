@@ -2,6 +2,7 @@
 // src/components/OBSSetupGuide.tsx
 
 import { useState } from 'react';
+import { ChevronDown, ChevronRight, Camera, Radio, TerminalIcon as Apple, Monitor as Windows, Lightbulb } from 'lucide-react';
 import styles from './OBSSetupGuide.module.css';
 
 type Method = 'virtualcam' | 'hls';
@@ -21,7 +22,7 @@ export default function OBSSetupGuide() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <span className={styles.triggerIcon}>{open ? '▾' : '▸'}</span>
+        <span className={styles.triggerIcon}>{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</span>
         How to connect OBS / streaming software
       </button>
 
@@ -32,13 +33,13 @@ export default function OBSSetupGuide() {
               className={[styles.methodTab, method === 'virtualcam' ? styles.methodActive : ''].join(' ')}
               onClick={() => setMethod('virtualcam')}
             >
-              📷 Virtual Camera <span className={styles.recommended}>Easiest</span>
+              <Camera size={16} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Virtual Camera <span className={styles.recommended}>Easiest</span>
             </button>
             <button
               className={[styles.methodTab, method === 'hls' ? styles.methodActive : ''].join(' ')}
               onClick={() => setMethod('hls')}
             >
-              📡 Local HLS Stream <span className={styles.recommended}>Best quality</span>
+              <Radio size={16} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Local HLS Stream <span className={styles.recommended}>Best quality</span>
             </button>
           </div>
 
@@ -61,7 +62,7 @@ export default function OBSSetupGuide() {
                 <li>
                   <span className={styles.stepNum}>2</span>
                   <div>
-                    <strong>In podcommentators:</strong> Click the <strong>📷 Camera</strong> tab above and
+                    <strong>In podcommentators:</strong> Click the <strong><Camera size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Camera</strong> tab above and
                     hit <strong>Start Camera</strong>. Select <em>OBS Virtual Camera</em> when the
                     browser asks which camera to use.
                   </div>
@@ -74,7 +75,7 @@ export default function OBSSetupGuide() {
                   </div>
                   <div className={styles.platformSplit}>
                     <div className={styles.platform}>
-                      <span className={styles.osLabel}>🍎 macOS</span>
+                      <span className={styles.osLabel}><Apple size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> macOS</span>
                       Install{' '}
                       <a href="https://existential.audio/blackhole/" target="_blank" rel="noopener noreferrer">
                         BlackHole
@@ -84,7 +85,7 @@ export default function OBSSetupGuide() {
                       your Microphone in the browser permission popup.
                     </div>
                     <div className={styles.platform}>
-                      <span className={styles.osLabel}>🪟 Windows</span>
+                      <span className={styles.osLabel}><Windows size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Windows</span>
                       Install{' '}
                       <a href="https://vb-audio.com/Cable/" target="_blank" rel="noopener noreferrer">
                         VB-Audio Cable
@@ -98,7 +99,7 @@ export default function OBSSetupGuide() {
               </ol>
 
               <div className={styles.tip}>
-                💡 <strong>Tip:</strong> Speech recognition works best with mono audio. In OBS,
+                <Lightbulb size={16} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> <strong>Tip:</strong> Speech recognition works best with mono audio. In OBS,
                 set your audio sample rate to 44.1 kHz.
               </div>
             </div>
@@ -108,7 +109,7 @@ export default function OBSSetupGuide() {
             <div className={styles.steps}>
               <p className={styles.intro}>
                 Run a tiny local media server that accepts OBS RTMP and serves it as HLS. Paste the
-                URL into the <strong>📡 Stream URL</strong> tab — full audio + video, no virtual
+                URL into the <strong><Radio size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Stream URL</strong> tab — full audio + video, no virtual
                 cable needed.
               </p>
 
@@ -140,7 +141,7 @@ export default function OBSSetupGuide() {
                 <li>
                   <span className={styles.stepNum}>3</span>
                   <div>
-                    <strong>In podcommentators</strong>, go to the <strong>📡 Stream URL</strong> tab and paste:
+                    <strong>In podcommentators</strong>, go to the <strong><Radio size={14} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> Stream URL</strong> tab and paste:
                     <div className={[styles.codeBlock, styles.codeUrl].join(' ')}>
                       http://localhost:8888/mystream/index.m3u8
                     </div>
@@ -150,7 +151,7 @@ export default function OBSSetupGuide() {
               </ol>
 
               <div className={styles.tip}>
-                💡 <strong>Note:</strong> HLS has ~3–6 s of latency vs the live feed. AI commentary
+                <Lightbulb size={16} style={{ display: 'inline-block', verticalAlign: 'text-bottom' }} /> <strong>Note:</strong> HLS has ~3–6 s of latency vs the live feed. AI commentary
                 still syncs well since it reacts to spoken words, not frames.
               </div>
 

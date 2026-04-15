@@ -2,6 +2,7 @@
 // src/components/TranscriptPanel.tsx
 
 import { useEffect, useRef } from 'react';
+import { Mic } from 'lucide-react';
 import { TranscriptChunk } from '@/types';
 import styles from './TranscriptPanel.module.css';
 
@@ -54,7 +55,7 @@ export default function TranscriptPanel({
       <div className={styles.body} ref={bodyRef}>
         {chunks.length === 0 && !interimText ? (
           <div className={styles.empty}>
-            <span className={styles.emptyIcon}>🎙️</span>
+            <div className={styles.emptyIcon} style={{ display: 'flex', justifyContent: 'center' }}><Mic size={32} /></div>
             <p>Start listening to see the live transcript here.</p>
             <p className={styles.emptyHint}>Tip: Use a virtual audio cable to route any podcast through your mic input.</p>
           </div>

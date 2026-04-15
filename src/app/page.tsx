@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Mic, Brain, Zap, ArrowRight, Activity } from 'lucide-react';
 import styles from './landing.module.css';
 
 export const metadata = {
@@ -33,20 +34,14 @@ export default function LandingPage() {
         <div className={styles.ctaWrapper}>
           <Link href="/app" className={styles.ctaButton}>
             <span>Launch Podcommentators</span>
-            <svg 
-              className={styles.ctaIcon}
-              viewBox="0 0 24 24" 
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <ArrowRight className={styles.ctaIcon} size={20} />
           </Link>
         </div>
 
         <div className={styles.featuresGrid}>
           <div className={styles.featureCard}>
             <div className={styles.featureIconWrapper}>
-              <span className={styles.featureIcon}>🎙️</span>
+              <Mic className={styles.featureIcon} size={24} color="#4F8EF7" />
             </div>
             <h3 className={styles.featureTitle}>Any Source</h3>
             <p className={styles.featureDesc}>
@@ -56,7 +51,7 @@ export default function LandingPage() {
 
           <div className={styles.featureCard}>
             <div className={styles.featureIconWrapper}>
-              <span className={styles.featureIcon}>🧠</span>
+              <Brain className={styles.featureIcon} size={24} color="#A78BFA" />
             </div>
             <h3 className={styles.featureTitle}>Custom Personas</h3>
             <p className={styles.featureDesc}>
@@ -66,7 +61,7 @@ export default function LandingPage() {
 
           <div className={styles.featureCard}>
             <div className={styles.featureIconWrapper}>
-              <span className={styles.featureIcon}>⚡️</span>
+              <Zap className={styles.featureIcon} size={24} color="#34D399" />
             </div>
             <h3 className={styles.featureTitle}>100% Client-Side</h3>
             <p className={styles.featureDesc}>

@@ -12,6 +12,7 @@ import TranscriptPanel from '@/components/TranscriptPanel';
 import CommentatorRail from '@/components/CommentatorRail';
 import VideoDisplay from '@/components/VideoDisplay';
 import SettingsModal from '@/components/SettingsModal';
+import { Mic, Sparkles, Square, Settings, AlertTriangle } from 'lucide-react';
 import styles from './page.module.css';
 
 export default function Home() {
@@ -108,7 +109,7 @@ export default function Home() {
       <header className={styles.topbar}>
         <div className={styles.topbarLeft}>
           <div className={styles.logo}>
-            <span className={styles.logoIcon}>🎙️</span>
+            <Mic className={styles.logoIcon} size={22} />
             <span className={styles.logoText}>podcommentators</span>
             <span className={styles.logoBadge}>AI</span>
           </div>
@@ -126,7 +127,7 @@ export default function Home() {
               onClick={() => setMode('enhanced')}
               id="btn-mode-enhanced"
             >
-              ✨ Enhanced
+              <Sparkles size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Enhanced
             </button>
           </div>
         </div>
@@ -138,7 +139,7 @@ export default function Home() {
               onClick={handleStopVideo}
               id="btn-stop-video"
             >
-              ⏹ Stop
+              <Square size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} fill="currentColor" /> Stop
             </button>
           )}
           <div className={styles.apiStatus}>
@@ -150,7 +151,7 @@ export default function Home() {
             onClick={() => setSettingsOpen(true)}
             id="btn-settings"
           >
-            ⚙️ Settings
+            <Settings size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Settings
           </button>
         </div>
       </header>
@@ -175,7 +176,7 @@ export default function Home() {
             <section className={styles.mainPanel}>
               {!hasApiKey && (
                 <div className={styles.apiBanner}>
-                  <span>⚠️</span>
+                  <AlertTriangle size={16} />
                   <span>
                     Add your Gemini API key in{' '}
                     <button className={styles.bannerBtn} onClick={() => setSettingsOpen(true)}>Settings</button>

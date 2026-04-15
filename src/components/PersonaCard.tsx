@@ -10,6 +10,8 @@
 
 import { Persona, PersonaState } from '@/types';
 import WaveformCanvas from './WaveformCanvas';
+import { IconResolver } from './IconResolver';
+import { AlertTriangle } from 'lucide-react';
 import styles from './PersonaCard.module.css';
 
 interface PersonaCardProps {
@@ -66,7 +68,7 @@ export default function PersonaCard({ persona, state, compact = false }: Persona
               style={{ width: compact ? 36 : 44, height: compact ? 36 : 44 }}
               aria-hidden="true"
             >
-              <span className={styles.avatarGlyph}>{persona.icon}</span>
+              <IconResolver name={persona.icon} size={compact ? 20 : 24} />
             </div>
           <span className={dotClass} />
         </div>
@@ -76,7 +78,7 @@ export default function PersonaCard({ persona, state, compact = false }: Persona
           {/* Info layer — visible when idle or thinking */}
           <div className={[styles.infoLayer, isActive ? styles.infoHidden : ''].filter(Boolean).join(' ')}>
             <div className={styles.nameRow}>
-              <span className={styles.emoji}>{persona.icon}</span>
+              <IconResolver name={persona.icon} size={16} className={styles.emoji} />
               <span className={styles.name}>{persona.name}</span>
             </div>
             {!compact && <span className={styles.role}>{persona.role}</span>}
@@ -98,7 +100,7 @@ export default function PersonaCard({ persona, state, compact = false }: Persona
       {/* Response bubble */}
       <div className={styles.responseBubble}>
         {error ? (
-          <p className={styles.errorText}>⚠️ {error}</p>
+          <p className={styles.errorText}><AlertTriangle size={14} style={{ display: 'inline-block', verticalAlign: 'middle' }} /> {error}</p>
         ) : currentResponse ? (
           <p className={styles.responseText}>
             {currentResponse}
