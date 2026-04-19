@@ -5,7 +5,7 @@ export type PersonaId = string;
 
 export type WaveformState = 'idle' | 'thinking' | 'active';
 
-export type AudioSource = 'mic' | 'camera' | 'stream' | 'screen';
+export type AudioSource = 'mic' | 'camera' | 'stream' | 'screen' | 'system-audio';
 
 export type AppMode = 'regular' | 'enhanced';
 

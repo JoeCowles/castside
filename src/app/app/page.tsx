@@ -2,7 +2,7 @@
 // src/app/app/page.tsx
 // podcommentators main page — orchestrates audio/video sources, transcript, and AI persona sidebar.
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppMode, AudioSource } from '@/types';
 import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
@@ -20,6 +20,14 @@ export default function Home() {
   const [mode, setMode] = useState<AppMode>('enhanced');
   const [source, setSource] = useState<AudioSource>('mic');
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Detect Electron context — must be done in useEffect to avoid SSR hydration mismatch
+  const [isElectron, setIsElectron] = useState(false);
+  const [isOverlay, setIsOverlay] = useState(false);
+  useEffect(() => {
+    setIsElectron(!!window.electronAPI?.isElectron);
+    setIsOverlay(!!(window.electronAPI as { isOverlay?: boolean } | undefined)?.isOverlay);
+  }, []);
 
   // Video state
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
@@ -44,6 +52,14 @@ export default function Home() {
     model: settings.model,
     onWaveformStateChange: handleWaveformChange,
   });
+
+  // ── Broadcast persona states to overlay window (Electron only) ────────────
+  useEffect(() => {
+    if (!isElectron || isOverlay) return;
+    const api = window.electronAPI;
+    if (!api || !('sendPersonaStates' in api)) return;
+    api.sendPersonaStates(enabledPersonas, personaStates);
+  }, [personaStates, enabledPersonas, isElectron, isOverlay]);
 
   // ── Transcript hook ───────────────────────────────────────────────────────
   const { chunks, interimText, isListening, startListening, stopListening, clearTranscript, micLevel, recognitionError, transcriptionEngine } =
@@ -216,8 +232,13 @@ export default function Home() {
         )}
       </main>
 
-      {/* ── Commentator Rail — enhanced mode only ── */}
-      {mode === 'enhanced' && (
+      {/* ── Commentator Rail — enhanced mode + not in Electron (it's in the overlay) ── */}
+      {mode === 'enhanced' && !isElectron && (
+        <CommentatorRail personas={enabledPersonas} personaStates={personaStates} />
+      )}
+
+      {/* ── In-app rail for Electron mode (fallback when overlay is unavailable) ── */}
+      {mode === 'enhanced' && isElectron && (
         <CommentatorRail personas={enabledPersonas} personaStates={personaStates} />
       )}
 

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  electron/entitlements.mac.plist
+  macOS Hardened Runtime entitlements for Podcommentators.
+
+  Required:
+    - com.apple.security.device.microphone    → mic transcription
+    - com.apple.security.device.audio-input   → same (belt + suspenders)
+    - com.apple.security.cs.allow-jit         → Electron / V8
+    - com.apple.security.cs.allow-unsigned-executable-memory → V8 JIT
+    - com.apple.security.network.client       → Gemini / ElevenLabs API calls
+
+  Screen Recording permission is requested at runtime via
+  desktopCapturer. No entitlement key exists for it — the OS prompts
+  automatically when getDisplayMedia / desktopCapturer is first used.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Allow JIT compilation (required by Electron's V8) -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+
+  <!-- Allow unsigned executable memory (also required by V8) -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Microphone access -->
+  <key>com.apple.security.device.microphone</key>
+  <true/>
+
+  <!-- Audio input (belt + suspenders) -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+
+  <!-- Outbound network for Gemini + ElevenLabs API -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+
+  <!-- Allow loading of dylibs from non-standard paths (Electron native modules) -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

@@ -101,7 +101,7 @@ export function useTranscript({
   // Engine: ElevenLabs > Web Speech (for mic only)
   const transcriptionEngine: UseTranscriptReturn['transcriptionEngine'] =
     isListening
-      ? (elevenLabsKey ? 'elevenlabs' : (source === 'mic' ? 'webspeech' : 'none'))
+      ? (elevenLabsKey ? 'elevenlabs' : (source === 'mic' || source === 'system-audio' ? 'webspeech' : 'none'))
       : 'none';
 
   useEffect(() => { chunksRef.current = chunks; }, [chunks]);
@@ -357,15 +357,12 @@ export function useTranscript({
     setRecognitionError(null);
     fatalErrorRef.current = false;
 
+    // ── Step 1: Get display media (intercepted by Electron to auto-select screen) ──
     let screenStream: MediaStream;
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,   // required by most browsers even if we only want audio
-        audio: {       // system/tab audio
-          echoCancellation: false,
-          noiseSuppression: false,
-          sampleRate: 44100,
-        },
+        video: true,
+        audio: true,  // simplified — let Electron's handler provide audio: 'loopback'
       });
     } catch (err) {
       setRecognitionError(`Screen capture cancelled or not permitted: ${(err as Error).message}`);
@@ -375,58 +372,100 @@ export function useTranscript({
 
     onPreviewStreamReady?.(screenStream);
 
-    // If the user ends screen share via the browser's built-in stop button
+    // Stop listening if the user ends screen share via Electron's stop button
     screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
       if (!fatalErrorRef.current) stopListeningRef.current();
     });
 
-    // Grab mic audio separately
+    const screenAudioTracks = screenStream.getAudioTracks();
+    console.log('[Audio] Screen stream audio tracks:', screenAudioTracks.length,
+      screenAudioTracks.map(t => `${t.label} (enabled=${t.enabled}, readyState=${t.readyState})`));
+
+    // ── Step 2: Get mic audio ──
     let micStream: MediaStream | null = null;
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      console.log('[Audio] Mic stream tracks:', micStream.getAudioTracks().length,
+        micStream.getAudioTracks().map(t => `${t.label} readyState=${t.readyState}`));
       activeStreamRef.current = micStream;
       startMicLevelMonitor(micStream);
-    } catch {
-      console.warn('[Screen] Mic access denied — transcribing system audio only.');
+    } catch (err) {
+      console.warn('[Audio] Mic access denied:', err);
     }
 
-    // Mix screen audio + mic audio
-    const audioCtx = new AudioContext();
-    const dest = audioCtx.createMediaStreamDestination();
+    // ── Step 3: Choose recording source ──
+    // Priority: system audio + mic mix > mic only > error
+    const hasSystemAudio = screenAudioTracks.length > 0 &&
+      screenAudioTracks.some(t => t.readyState === 'live');
+    const hasMic = !!micStream && micStream.getAudioTracks().some(t => t.readyState === 'live');
 
-    const screenAudioTracks = screenStream.getAudioTracks();
-    if (screenAudioTracks.length > 0) {
-      const screenOnlyStream = new MediaStream(screenAudioTracks);
-      audioCtx.createMediaStreamSource(screenOnlyStream).connect(dest);
+    console.log(`[Audio] hasSystemAudio=${hasSystemAudio}, hasMic=${hasMic}`);
+
+    let recordingStream: MediaStream;
+
+    if (hasSystemAudio || hasMic) {
+      // Use AudioContext to mix sources
+      const audioCtx = new AudioContext({ sampleRate: 44100 });
+      // AudioContext in Electron/Chrome often starts suspended — must resume
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+        console.log('[Audio] AudioContext resumed from suspended state');
+      }
+      const dest = audioCtx.createMediaStreamDestination();
+
+      if (hasSystemAudio) {
+        audioCtx.createMediaStreamSource(new MediaStream(screenAudioTracks)).connect(dest);
+        console.log('[Audio] Connected system audio to mixer');
+      }
+      if (hasMic) {
+        audioCtx.createMediaStreamSource(micStream!).connect(dest);
+        console.log('[Audio] Connected mic to mixer');
+      }
+
+      recordingStream = dest.stream;
     } else {
-      console.warn('[Screen] No system audio track — user may not have ticked "Share system audio".');
+      // No audio at all
+      setRecognitionError(
+        'No audio available. Check that microphone and Screen Recording permissions are granted in System Settings.'
+      );
+      setIsListening(false);
+      screenStream.getTracks().forEach(t => t.stop());
+      return;
     }
 
-    if (micStream) {
-      audioCtx.createMediaStreamSource(micStream).connect(dest);
-    }
-
+    // ── Step 4: Start MediaRecorder ──
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
       ? 'audio/webm;codecs=opus'
       : MediaRecorder.isTypeSupported('audio/webm')
       ? 'audio/webm'
       : 'audio/ogg';
 
-    const recorder = new MediaRecorder(dest.stream, { mimeType });
+    console.log('[Audio] Starting MediaRecorder with mimeType:', mimeType,
+      'stream tracks:', recordingStream.getAudioTracks().length);
+
+    const recorder = new MediaRecorder(recordingStream, { mimeType });
     const audioChunks: Blob[] = [];
 
     recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data);
+      if (e.data.size > 0) {
+        console.log('[Audio] Got audio chunk:', e.data.size, 'bytes');
+        audioChunks.push(e.data);
+      }
     };
 
     recorder.onstop = async () => {
       if (fatalErrorRef.current) return;
-      if (audioChunks.length === 0) return;
+      if (audioChunks.length === 0) {
+        console.warn('[Audio] recorder.onstop: no chunks — silence?');
+        return;
+      }
       const blob = new Blob(audioChunks, { type: mimeType });
       audioChunks.length = 0;
+      console.log('[Audio] Sending', blob.size, 'bytes to ElevenLabs');
 
       try {
         const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
+        console.log('[Audio] Transcription result:', JSON.stringify(text));
         const ignore = ['there is no speech.', '[silence]', '[music]', ''];
         if (text && !ignore.includes(text.toLowerCase().trim())) {
           commitChunk(text);
@@ -458,7 +497,118 @@ export function useTranscript({
 
     recorder.start();
     mediaRecorderRef.current = recorder;
+    console.log('[Audio] MediaRecorder started, state:', recorder.state);
   }, [elevenLabsKey, commitChunk, onPreviewStreamReady, startMicLevelMonitor]);
+
+  // ── Strategy E: Electron system-audio capture (all computer audio) ─────────
+  // Uses desktopCapturer via the Electron preload bridge to capture all system
+  // audio without needing a virtual audio device. Requires Screen Recording
+  // permission granted in macOS System Settings.
+  const startSystemAudioListening = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api || !('getAudioSources' in api)) {
+      setRecognitionError('System audio capture requires the desktop app. Download it or use Screen Capture mode in the browser.');
+      setIsListening(false);
+      return;
+    }
+    if (!elevenLabsKey) {
+      setRecognitionError('An ElevenLabs API key is required for system audio transcription. Open Settings to add one.');
+      setIsListening(false);
+      return;
+    }
+
+    setRecognitionError(null);
+    fatalErrorRef.current = false;
+
+    // Ask the main process for available desktop sources
+    let sources: Array<{ id: string; name: string }>;
+    try {
+      sources = await (api as { getAudioSources: () => Promise<Array<{ id: string; name: string }>> }).getAudioSources();
+    } catch (err) {
+      setRecognitionError(`Could not enumerate audio sources: ${(err as Error).message}`);
+      setIsListening(false);
+      return;
+    }
+
+    // Prefer a source named "Entire Screen" or fall back to first screen source
+    const screenSource =
+      sources.find((s) => s.name.toLowerCase().includes('entire screen')) ??
+      sources.find((s) => s.id.startsWith('screen:')) ??
+      sources[0];
+
+    if (!screenSource) {
+      setRecognitionError('No screen source found for system audio capture.');
+      setIsListening(false);
+      return;
+    }
+
+    // Build constraints using the Electron preload helper
+    const constraints = (api as { getSystemAudioConstraints: (id: string) => MediaStreamConstraints }).getSystemAudioConstraints(screenSource.id);
+
+    let systemStream: MediaStream;
+    try {
+      systemStream = await navigator.mediaDevices.getUserMedia(constraints);
+      activeStreamRef.current = systemStream;
+      startMicLevelMonitor(systemStream);
+    } catch (err) {
+      setRecognitionError(
+        `System audio access failed: ${(err as Error).message}. ` +
+        'Grant Screen Recording permission in System Settings → Privacy & Security.'
+      );
+      setIsListening(false);
+      return;
+    }
+
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : 'audio/ogg';
+
+    const recorder = new MediaRecorder(systemStream, { mimeType });
+    const audioChunks: Blob[] = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      if (fatalErrorRef.current) return;
+      if (audioChunks.length === 0) return;
+      const blob = new Blob(audioChunks, { type: mimeType });
+      audioChunks.length = 0;
+
+      try {
+        const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
+        const ignore = ['there is no speech.', '[silence]', '[music]', ''];
+        if (text && !ignore.includes(text.toLowerCase().trim())) {
+          commitChunk(text);
+          setRecognitionError(null);
+        }
+      } catch (err) {
+        if (!fatalErrorRef.current) {
+          setRecognitionError(`Transcription error: ${(err as Error).message}`);
+        }
+      }
+
+      if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
+        try { recorder.start(); } catch { /* stopped */ }
+      }
+    };
+
+    const slice = () => {
+      if (fatalErrorRef.current) return;
+      if (recorder.state === 'recording') {
+        recorder.requestData();
+        recorder.stop();
+      }
+    };
+
+    const interval = setInterval(slice, 3000);
+    (recorder as MediaRecorder & { _interval?: ReturnType<typeof setInterval> })._interval = interval;
+    recorder.start();
+    mediaRecorderRef.current = recorder;
+  }, [elevenLabsKey, commitChunk, startMicLevelMonitor]);
 
   // ── Public API ──────────────────────────────────────────────────────────
   const startListening = useCallback(() => {
@@ -469,6 +619,8 @@ export function useTranscript({
       startStreamListening();
     } else if (source === 'screen') {
       startScreenListening();
+    } else if (source === 'system-audio') {
+      startSystemAudioListening();
     } else if (elevenLabsKey) {
       // ElevenLabs chunked transcription — most accurate
       startElevenLabsMicListening();
@@ -476,7 +628,7 @@ export function useTranscript({
       // Fallback: Web Speech API (free, Chrome/Edge only)
       startWebSpeechListening();
     }
-  }, [source, elevenLabsKey, startElevenLabsMicListening, startWebSpeechListening, startStreamListening, startScreenListening]);
+  }, [source, elevenLabsKey, startElevenLabsMicListening, startWebSpeechListening, startStreamListening, startScreenListening, startSystemAudioListening]);
 
   const stopListening = useCallback(() => {
     setIsListening(false);

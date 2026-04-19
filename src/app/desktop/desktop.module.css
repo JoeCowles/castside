@@ -1,0 +1,427 @@
+/* src/app/desktop/desktop.module.css */
+
+/* ── App shell ──────────────────────────────────────────────────────────────── */
+.app {
+  width: 100vw;
+  height: 100vh;
+  background: #0a0a14;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, sans-serif;
+  color: #c5c8e8;
+  position: relative;
+  /* No -webkit-app-region here — it causes children's no-drag to be unreliable */
+}
+
+.app::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%,  rgba(79, 142, 247, 0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(124, 92, 252, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Drag handle — thin strip at the very top, left of traffic lights ────────
+   titleBarStyle: hiddenInset already makes the OS-level title bar draggable,
+   so we only need CSS dragging if you want to drag from below the traffic lights. */
+.dragHandle {
+  position: absolute;
+  top: 0;
+  left: 80px; /* clear the traffic light buttons */
+  right: 80px; /* clear the settings area */
+  height: 28px;
+  -webkit-app-region: drag;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+/* ── Top bar ────────────────────────────────────────────────────────────────── */
+.topbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Left padding clears the macOS traffic lights (hiddenInset style) */
+  padding: 14px 16px 10px 88px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.logoIcon { color: #4F8EF7; flex-shrink: 0; }
+
+.logoText {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #e8eaf6;
+}
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  z-index: 20; /* ensure it sits above all pseudo-elements */
+}
+
+.apiDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2a2d45;
+  flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.apiDotOn {
+  background: #34D399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+}
+
+.settingsBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s;
+  position: relative;
+  z-index: 20;
+  /* Minimum tap target size */
+  min-width: 36px;
+  min-height: 36px;
+}
+.settingsBtn:hover { color: #c5c8e8; background: rgba(255,255,255,0.06); }
+.settingsBtn:active { background: rgba(255,255,255,0.1); }
+
+/* ── Main area ──────────────────────────────────────────────────────────────── */
+.main {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 20px 12px;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.statusLabel {
+  font-size: 11px;
+  color: #2d3155;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  transition: color 0.4s;
+}
+
+.statusLabelActive { color: #6b7cff; }
+
+/* ── Orb ────────────────────────────────────────────────────────────────────── */
+.orb {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.1s ease-out, opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.orb:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.orbGlow {
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(79, 142, 247, 0.15) 0%, transparent 70%);
+  animation: haloIdle 4s infinite ease-in-out;
+  transition: background 0.5s;
+  pointer-events: none;
+}
+
+.orbActive .orbGlow {
+  background: radial-gradient(circle, rgba(124, 92, 252, 0.3) 0%, transparent 70%);
+  animation: haloActive 1.5s infinite ease-in-out;
+}
+
+@keyframes haloIdle {
+  0%, 100% { transform: scale(1);    opacity: 0.7; }
+  50%       { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes haloActive {
+  0%, 100% { transform: scale(1);    opacity: 0.8; }
+  50%       { transform: scale(1.14); opacity: 1; }
+}
+
+.orbInner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #181828 0%, #0d0d1c 100%);
+  border: 1.5px solid rgba(79, 142, 247, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04) inset,
+    0 16px 48px rgba(0,0,0,0.5),
+    0 0 24px rgba(79, 142, 247, 0.08);
+  transition: border-color 0.4s, box-shadow 0.4s, background 0.4s;
+}
+
+.orb:hover:not(:disabled) .orbInner {
+  border-color: rgba(79, 142, 247, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06) inset,
+    0 16px 48px rgba(0,0,0,0.5),
+    0 0 32px rgba(79, 142, 247, 0.18);
+}
+
+.orbActive .orbInner {
+  background: linear-gradient(145deg, #1c1430 0%, #100e22 100%);
+  border-color: rgba(124, 92, 252, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06) inset,
+    0 16px 48px rgba(0,0,0,0.5),
+    0 0 40px rgba(124, 92, 252, 0.25);
+}
+
+.orbWarning .orbGlow {
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.2) 0%, transparent 70%);
+}
+
+.orbWarning .orbInner {
+  border-color: rgba(251, 146, 60, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04) inset,
+    0 16px 48px rgba(0,0,0,0.5),
+    0 0 24px rgba(251, 146, 60, 0.12);
+}
+
+.orbIcon {
+  color: #6b7280;
+  transition: color 0.3s;
+}
+.orb:hover:not(:disabled) .orbIcon { color: #c5c8e8; }
+.orbActive .orbIcon { color: #a78bfa; }
+
+.orbIconWarning {
+  color: #fb923c;
+  transition: color 0.3s;
+}
+
+.orbLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  transition: color 0.3s;
+  user-select: none;
+}
+.orb:hover:not(:disabled) .orbLabel { color: #e8eaf6; }
+.orbActive .orbLabel { color: #c4b5fd; }
+
+/* ── Error + nudge ─────────────────────────────────────────────────────────── */
+.errorMsg {
+  font-size: 11px;
+  color: #F87171;
+  text-align: center;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+/* Permission denied banner */
+.permBanner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 10px;
+  font-size: 12px;
+  color: #F87171;
+}
+
+.permBtn {
+  background: none;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: 6px;
+  color: #F87171;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.permBtn:hover { background: rgba(248, 113, 113, 0.12); }
+
+.nudge {
+  font-size: 11px;
+  color: #3d4263;
+  text-align: center;
+}
+
+.nudgeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #4F8EF7;
+  font-size: 11px;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Transcript ─────────────────────────────────────────────────────────────── */
+.transcript {
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.chunk {
+  font-size: 13px;
+  color: #9299bc;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.interim {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.55;
+  margin: 0;
+  font-style: italic;
+}
+
+.cursor {
+  display: inline-block;
+  animation: blink 0.8s step-end infinite;
+  margin-left: 1px;
+  color: #4F8EF7;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ── Listening dots ──────────────────────────────────────────────────────────── */
+.transcriptPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.transcriptPlaceholder p {
+  font-size: 12px;
+  color: #2d3155;
+  margin: 0;
+}
+
+.listeningDots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.listeningDots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #4F8EF7;
+  opacity: 0.4;
+  animation: dotBounce 1.2s ease-in-out infinite;
+}
+
+.listeningDots span:nth-child(2) { animation-delay: 0.2s; }
+.listeningDots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: scale(1);   opacity: 0.4; }
+  40%            { transform: scale(1.4); opacity: 1; }
+}
+
+/* ── Footer — persona dots ─────────────────────────────────────────────────── */
+.footer {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 10px 18px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  flex-shrink: 0;
+}
+
+.personaDot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.dot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transition: box-shadow 0.3s, opacity 0.3s;
+}
+
+.dotActive {
+  box-shadow: 0 0 7px var(--color);
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+.dotLabel {
+  font-size: 9px;
+  color: #2d3155;
+  letter-spacing: 0.02em;
+  transition: color 0.3s;
+  text-transform: uppercase;
+  font-weight: 500;
+}

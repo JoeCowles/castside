@@ -131,21 +131,34 @@
   transform: translateY(20px);
 }
 
-/* ── CTA Button ── */
+/* ── CTA Row ── */
 .ctaWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
   animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
   opacity: 0;
   transform: translateY(20px);
 }
 
-.ctaButton {
+.ctaRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Primary: Download */
+.downloadBtn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 18px 40px;
-  font-size: 18px;
+  gap: 10px;
+  padding: 16px 36px;
+  font-size: 17px;
   font-weight: 600;
   color: white;
   background: linear-gradient(135deg, #4F8EF7 0%, #7c5cfc 100%);
@@ -154,9 +167,10 @@
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 10px 30px rgba(124, 92, 252, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   overflow: hidden;
+  cursor: pointer;
 }
 
-.ctaButton::before {
+.downloadBtn::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -166,29 +180,56 @@
   z-index: 1;
 }
 
-.ctaButton:hover {
+.downloadBtn:hover {
   transform: translateY(-3px) scale(1.02);
   box-shadow: 0 20px 40px rgba(124, 92, 252, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.ctaButton:hover::before {
-  opacity: 1;
-}
+.downloadBtn:hover::before { opacity: 1; }
 
-.ctaButton span, .ctaButton svg {
+.downloadBtn > * {
   position: relative;
   z-index: 2;
 }
 
-.ctaIcon {
-  width: 20px;
-  height: 20px;
-  fill: currentColor;
-  transition: transform 0.3s ease;
+/* Secondary: Continue on Web */
+.webBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 28px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 100px;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(10px);
 }
 
-.ctaButton:hover .ctaIcon {
-  transform: translateX(4px);
+.webBtn:hover {
+  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateY(-2px);
+}
+
+.webBtnArrow {
+  transition: transform 0.3s ease;
+  opacity: 0.6;
+}
+
+.webBtn:hover .webBtnArrow {
+  transform: translateX(3px);
+}
+
+.ctaNote {
+  font-size: 13px;
+  color: #3d4263;
+  letter-spacing: 0.02em;
 }
 
 /* ── Features Grid ── */

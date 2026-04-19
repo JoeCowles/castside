@@ -2,11 +2,16 @@
   "name": "podcommentators",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/dist/main.js",
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "electron:compile": "tsc --project tsconfig.electron.json",
+    "electron:dev": "npm run electron:compile && concurrently --kill-others --names \"next,tsc,electron\" \"next dev --webpack\" \"tsc --project tsconfig.electron.json --watch --preserveWatchOutput\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:build": "next build && npm run electron:compile && electron-builder",
+    "electron:pack": "next build && npm run electron:compile && electron-builder --dir"
   },
   "dependencies": {
     "@google/genai": "^1.50.1",
@@ -20,9 +25,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^8.2.2",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "raw-loader": "^4.0.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^8.0.1"
   }
 }

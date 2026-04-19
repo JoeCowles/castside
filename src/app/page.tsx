@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Mic, Brain, Zap, ArrowRight, Activity } from 'lucide-react';
+import { Mic, Brain, Zap, Download, ArrowRight, Monitor } from 'lucide-react';
 import styles from './landing.module.css';
 
 export const metadata = {
@@ -32,10 +32,28 @@ export default function LandingPage() {
         </p>
 
         <div className={styles.ctaWrapper}>
-          <Link href="/app" className={styles.ctaButton}>
-            <span>Launch Podcommentators</span>
-            <ArrowRight className={styles.ctaIcon} size={20} />
-          </Link>
+          <div className={styles.ctaRow}>
+            <a
+              href="/download"
+              className={styles.downloadBtn}
+              id="btn-download-app"
+            >
+              <Download size={18} />
+              <span>Download for Mac</span>
+            </a>
+            <Link
+              href="/app"
+              className={styles.webBtn}
+              id="btn-continue-web"
+            >
+              <Monitor size={16} />
+              <span>Continue on Web</span>
+              <ArrowRight size={14} className={styles.webBtnArrow} />
+            </Link>
+          </div>
+          <p className={styles.ctaNote}>
+            macOS 13+ &nbsp;·&nbsp; Free desktop app &nbsp;·&nbsp; Screen-share safe
+          </p>
         </div>
 
         <div className={styles.featuresGrid}>
