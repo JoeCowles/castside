@@ -6,7 +6,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
-import { Settings, Mic, MicOff } from 'lucide-react';
+import { Settings, Mic, MicOff, Eye, EyeOff } from 'lucide-react';
 import styles from './desktop.module.css';
 import type { MainWindowElectronAPI } from '@/types/electron';
 
@@ -22,6 +22,7 @@ function getMainApi(): MainWindowElectronAPI | undefined {
 export default function DesktopPage() {
   const { settings } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [screenshareVisible, setScreenshareVisible] = useState(false);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const streamAudioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
@@ -155,6 +156,12 @@ export default function DesktopPage() {
   const recentChunks = chunks.slice(-6);
   const hasTranscript = recentChunks.length > 0 || !!interimText;
 
+  const toggleScreenshareVisibility = useCallback(() => {
+    const nextVal = !screenshareVisible;
+    setScreenshareVisible(nextVal);
+    getMainApi()?.setScreenshareVisible?.(nextVal);
+  }, [screenshareVisible]);
+
   return (
     <div className={styles.app}>
       {/* Thin drag strip — clears traffic lights and settings button */}
@@ -171,6 +178,16 @@ export default function DesktopPage() {
             className={[styles.apiDot, hasApiKey ? styles.apiDotOn : ''].join(' ')}
             title={hasApiKey ? 'Gemini connected' : 'No API key'}
           />
+          {isElectron && (
+            <button
+              className={screenshareVisible ? styles.visibilityBtnOn : styles.settingsBtn}
+              onClick={toggleScreenshareVisibility}
+              title={screenshareVisible ? "Visible to screenshare" : "Invisible to screenshare"}
+              aria-label="Toggle screenshare visibility"
+            >
+              {screenshareVisible ? <Eye size={15} /> : <EyeOff size={15} />}
+            </button>
+          )}
           <button
             className={styles.settingsBtn}
             onClick={() => setSettingsOpen(true)}

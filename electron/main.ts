@@ -167,8 +167,15 @@ function createOverlayWindow() {
     },
   });
 
-  // ← THE MAGIC: invisible to all screen capture
-  overlayWin.setContentProtection(true);
+  // ← THE MAGIC: invisible to all screen capture (unless DEMO_MODE bypasses it for recording)
+  const isDemoMode = process.env.DEMO_MODE === '1';
+  if (!isDemoMode) {
+    overlayWin.setContentProtection(true);
+  }
+
+  // Force maximum z-index (floating above everything, even fullscreen presentations)
+  overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   // Start fully click-through; renderer enables hit-testing for card areas
   overlayWin.setIgnoreMouseEvents(true, { forward: true });
@@ -243,6 +250,12 @@ function setupIPC() {
       ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
       : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone';
     shell.openExternal(url);
+  });
+
+  // Renderer → main: toggle screenshare visibility (content protection)
+  ipcMain.on('set-screenshare-visible', (_event, visible: boolean) => {
+    if (mainWindow) mainWindow.setContentProtection(!visible);
+    if (overlayWin) overlayWin.setContentProtection(!visible);
   });
 
   // Relay window visibility for overlay show/hide

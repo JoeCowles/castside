@@ -20,6 +20,7 @@ export interface MainWindowElectronAPI {
   getSystemAudioConstraints: (sourceId: string) => MediaStreamConstraints;
 
   setOverlayVisible: (visible: boolean) => void;
+  setScreenshareVisible: (visible: boolean) => void;
 
   /** Returns macOS permission status: 'granted' | 'denied' | 'restricted' | 'not-determined' */
   checkPermissions: () => Promise<{ microphone: string; screen: string }>;

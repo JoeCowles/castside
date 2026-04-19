@@ -75,6 +75,10 @@ const api: ElectronAPI = {
   openPrivacySettings(pane = 'microphone') {
     ipcRenderer.send('open-privacy-settings', pane);
   },
+
+  setScreenshareVisible(visible: boolean) {
+    ipcRenderer.send('set-screenshare-visible', visible);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

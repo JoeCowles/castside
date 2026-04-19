@@ -109,6 +109,28 @@
 .settingsBtn:hover { color: #c5c8e8; background: rgba(255,255,255,0.06); }
 .settingsBtn:active { background: rgba(255,255,255,0.1); }
 
+.visibilityBtnOn {
+  /* Shares the layout geometry of settingsBtn */
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s;
+  position: relative;
+  z-index: 20;
+  min-width: 36px;
+  min-height: 36px;
+  
+  /* Distinct active state styling */
+  color: #fb923c; /* orange meaning visible/warning */
+  background: rgba(251, 146, 60, 0.1);
+}
+.visibilityBtnOn:hover { color: #ffedd5; background: rgba(251, 146, 60, 0.2); }
+
 /* ── Main area ──────────────────────────────────────────────────────────────── */
 .main {
   position: relative;
