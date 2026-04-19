@@ -31,7 +31,11 @@ export default function DesktopPage() {
     const isElec = !!window.electronAPI?.isElectron;
     setIsElectron(isElec);
     if (isElec) {
-      window.electronAPI!.checkPermissions().then(setPermStatus).catch(console.error);
+      const api = window.electronAPI;
+      // Narrow to main-window API — overlay API doesn't have checkPermissions
+      if (api && !('isOverlay' in api && (api as { isOverlay?: boolean }).isOverlay)) {
+        (api as MainWindowElectronAPI).checkPermissions().then(setPermStatus).catch(console.error);
+      }
     }
 
     // Enumerate audio input devices — works in renderer without IPC

@@ -17,7 +17,7 @@ interface VideoDisplayProps {
   /** Whether the session is live (shows LIVE dot) */
   isListening: boolean;
   /** Active source label for the live stream */
-  source: 'camera' | 'screen' | 'stream' | 'mic';
+  source: 'camera' | 'screen' | 'stream' | 'mic' | 'system-audio';
 }
 
 export default function VideoDisplay({
