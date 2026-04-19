@@ -80,19 +80,18 @@ jobs:
       - name: Compile Electron TypeScript
         run: npm run electron:compile
 
-      # ── electron-builder ──────────────────────────────────────────────────
-      - name: Build installer (${{ matrix.platform }})
-        run: npx electron-builder --${{ matrix.platform }} --publish ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || inputs.publish == 'true' && 'always' || 'never' }}
+      # ── electron-builder (publish to GitHub Releases on tag push) ────────
+      - name: Build installer — publish to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish == 'true'
+        run: npx electron-builder --${{ matrix.platform }} --publish always
         env:
-          # Used by electron-builder to upload to GitHub Releases
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code signing (optional — remove these if you don't have a cert)
-          # CSC_LINK:           ${{ secrets.MAC_CERT_P12_BASE64 }}
-          # CSC_KEY_PASSWORD:   ${{ secrets.MAC_CERT_PASSWORD }}
-          # Apple notarization (optional)
-          # APPLE_ID:           ${{ secrets.APPLE_ID }}
-          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          # APPLE_TEAM_ID:      ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build installer — local artifact only
+        if: "!startsWith(github.ref, 'refs/tags/') && inputs.publish != 'true'"
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ── Upload build artifacts ─────────────────────────────────────────────
       - name: Upload installer artifact
