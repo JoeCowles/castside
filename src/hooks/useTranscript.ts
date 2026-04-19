@@ -60,6 +60,8 @@ interface UseTranscriptOptions {
   elevenLabsKey: string;
   onChunkCommitted: (chunk: string, allChunks: TranscriptChunk[]) => void;
   onPreviewStreamReady?: (stream: MediaStream | null) => void;
+  /** deviceId of the preferred microphone input (from enumerateDevices) */
+  micDeviceId?: string;
 }
 
 interface UseTranscriptReturn {
@@ -78,10 +80,11 @@ interface UseTranscriptReturn {
 export function useTranscript({
   source,
   streamAudioRef,
-  apiKey: _apiKey, // retained in props for backwards compat but not used for transcription
+  apiKey: _apiKey,
   elevenLabsKey,
   onChunkCommitted,
   onPreviewStreamReady,
+  micDeviceId,
 }: UseTranscriptOptions): UseTranscriptReturn {
   const [chunks, setChunks] = useState<TranscriptChunk[]>([]);
   const [interimText, setInterimText] = useState('');
@@ -384,13 +387,39 @@ export function useTranscript({
     // ── Step 2: Get mic audio ──
     let micStream: MediaStream | null = null;
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // Build audio constraints — prefer the user-chosen device, fall back to default
+      const audioConstraints: MediaTrackConstraints = micDeviceId
+        ? { deviceId: { ideal: micDeviceId } }
+        : { echoCancellation: true, noiseSuppression: true };
+
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
       console.log('[Audio] Mic stream tracks:', micStream.getAudioTracks().length,
         micStream.getAudioTracks().map(t => `${t.label} readyState=${t.readyState}`));
       activeStreamRef.current = micStream;
       startMicLevelMonitor(micStream);
     } catch (err) {
-      console.warn('[Audio] Mic access denied:', err);
+      const error = err as DOMException;
+      console.warn('[Audio] Mic access denied:', error.name, error.message);
+
+      // NotFoundError = specific device missing; retry with any available device
+      if (error.name === 'NotFoundError') {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const inputs = devices.filter(d => d.kind === 'audioinput');
+          console.log('[Audio] Available audio inputs:', inputs.map(d => `${d.label} (${d.deviceId})`));
+          if (inputs.length > 0) {
+            micStream = await navigator.mediaDevices.getUserMedia({
+              audio: { deviceId: { exact: inputs[0].deviceId } },
+              video: false,
+            });
+            console.log('[Audio] Fallback mic acquired:', micStream.getAudioTracks()[0]?.label);
+            activeStreamRef.current = micStream;
+            startMicLevelMonitor(micStream);
+          }
+        } catch (fallbackErr) {
+          console.warn('[Audio] Fallback mic also failed:', fallbackErr);
+        }
+      }
     }
 
     // ── Step 3: Choose recording source ──
@@ -498,7 +527,7 @@ export function useTranscript({
     recorder.start();
     mediaRecorderRef.current = recorder;
     console.log('[Audio] MediaRecorder started, state:', recorder.state);
-  }, [elevenLabsKey, commitChunk, onPreviewStreamReady, startMicLevelMonitor]);
+  }, [elevenLabsKey, micDeviceId, commitChunk, onPreviewStreamReady, startMicLevelMonitor]);
 
   // ── Strategy E: Electron system-audio capture (all computer audio) ─────────
   // Uses desktopCapturer via the Electron preload bridge to capture all system

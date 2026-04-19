@@ -288,6 +288,54 @@
   text-align: center;
 }
 
+/* ── Mic device picker ─────────────────────────────────────────────────────── */
+.micPickerRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.micPickerIcon {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.micPicker {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #9299bc;
+  font-size: 11px;
+  padding: 6px 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.micPicker:hover:not(:disabled) {
+  border-color: rgba(79, 142, 247, 0.3);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.micPicker:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.micPicker option {
+  background: #1a1a2e;
+  color: #c5c8e8;
+}
+
+
 .nudgeBtn {
   background: none;
   border: none;

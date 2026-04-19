@@ -1,20 +1,12 @@
 'use client';
 // src/app/desktop/page.tsx
-// Electron-exclusive desktop UI.
-//
-// Audio strategy:
-//   1. On Start click, ask for mic permission via IPC (shows macOS dialog if not-determined)
-//   2. If denied, show a banner with direct link to System Settings
-//   3. Use 'screen' source so that Electron's setDisplayMediaRequestHandler
-//      auto-selects system audio (loopback) without a picker
-//   4. Mic audio is mixed in if available (shown as "Mic + System Audio")
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
-import { Settings, Mic, MicOff, MicOff as MicDenied } from 'lucide-react';
+import { Settings, Mic, MicOff } from 'lucide-react';
 import styles from './desktop.module.css';
 
 type PermStatus = { microphone: string; screen: string } | null;
@@ -26,10 +18,14 @@ export default function DesktopPage() {
   const streamAudioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Detect Electron — client-side only
+  // Electron detection (client-side only to avoid hydration mismatch)
   const [isElectron, setIsElectron] = useState(false);
   const [permStatus, setPermStatus] = useState<PermStatus>(null);
   const [permLoading, setPermLoading] = useState(false);
+
+  // Mic device selection
+  const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
+  const [micDeviceId, setMicDeviceId] = useState<string>('');
 
   useEffect(() => {
     const isElec = !!window.electronAPI?.isElectron;
@@ -37,14 +33,34 @@ export default function DesktopPage() {
     if (isElec) {
       window.electronAPI!.checkPermissions().then(setPermStatus).catch(console.error);
     }
+
+    // Enumerate audio input devices — works in renderer without IPC
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      const inputs = devices.filter((d) => d.kind === 'audioinput');
+      setAudioInputs(inputs);
+      // Pick first non-default device if available, otherwise first device
+      const preferred = inputs.find((d) => d.deviceId !== 'default' && d.deviceId !== 'communications') ?? inputs[0];
+      if (preferred) setMicDeviceId(preferred.deviceId);
+    }).catch(console.warn);
   }, []);
 
-  // Refresh permission status
+  // Re-enumerate after permissions are granted (labels appear after first getUserMedia)
+  const refreshDevices = useCallback(async () => {
+    const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+    const inputs = devices.filter((d) => d.kind === 'audioinput');
+    setAudioInputs(inputs);
+    if (inputs.length > 0 && !micDeviceId) {
+      const preferred = inputs.find((d) => d.deviceId !== 'default') ?? inputs[0];
+      setMicDeviceId(preferred.deviceId);
+    }
+  }, [micDeviceId]);
+
   const refreshPerms = useCallback(async () => {
     if (!window.electronAPI?.checkPermissions) return;
     const p = await window.electronAPI.checkPermissions().catch(() => null);
     setPermStatus(p);
-  }, []);
+    await refreshDevices();
+  }, [refreshDevices]);
 
   const enabledPersonas = useMemo(
     () => settings.personas.filter((p) => p.enabled),
@@ -61,7 +77,7 @@ export default function DesktopPage() {
     onWaveformStateChange: handleWaveformChange,
   });
 
-  // Broadcast persona states to overlay
+  // Broadcast persona states to the overlay window
   useEffect(() => {
     if (!isElectron) return;
     const api = window.electronAPI;
@@ -80,14 +96,15 @@ export default function DesktopPage() {
     elevenLabsKey: settings.elevenLabsKey,
     onChunkCommitted,
     onPreviewStreamReady: setPreviewStream,
+    micDeviceId: micDeviceId || undefined,
   });
 
-  // Auto-scroll transcript to bottom
+  // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chunks, interimText]);
 
-  // Click Start: request mic permission first, then start
+  // On Start: request mic permission first, then enumerate devices, then start
   const handleToggle = useCallback(async () => {
     if (isListening) {
       stopListening();
@@ -96,14 +113,12 @@ export default function DesktopPage() {
       return;
     }
 
-    // In Electron, request mic permission on demand before starting
     if (isElectron && window.electronAPI?.requestMicAccess) {
       setPermLoading(true);
       try {
         const result = await window.electronAPI.requestMicAccess();
-        await refreshPerms();
+        await refreshPerms(); // also re-enumerates devices with real labels
         if (result === 'denied') {
-          // Don't start — UI will show the banner
           setPermLoading(false);
           return;
         }
@@ -117,9 +132,9 @@ export default function DesktopPage() {
   }, [isListening, startListening, stopListening, previewStream, isElectron, refreshPerms]);
 
   const hasApiKey = Boolean(settings.apiKey);
-  const micDenied   = isElectron && permStatus?.microphone === 'denied';
+  const micDenied    = isElectron && permStatus?.microphone === 'denied';
   const screenDenied = isElectron && permStatus?.screen === 'denied';
-  const anyDenied = micDenied || screenDenied;
+  const anyDenied    = micDenied || screenDenied;
 
   const activeCount = Object.values(personaStates).filter(
     (s) => s.isStreaming || s.waveformState !== 'idle'
@@ -130,7 +145,7 @@ export default function DesktopPage() {
 
   return (
     <div className={styles.app}>
-      {/* Thin drag strip in center of topbar (clears traffic lights + settings btn) */}
+      {/* Thin drag strip — clears traffic lights and settings button */}
       <div className={styles.dragHandle} />
 
       {/* ── Top bar ── */}
@@ -158,22 +173,16 @@ export default function DesktopPage() {
       {/* ── Permission banners ── */}
       {micDenied && (
         <div className={styles.permBanner}>
-          <span>🎙️ Microphone access denied in System Settings</span>
-          <button
-            className={styles.permBtn}
-            onClick={() => window.electronAPI?.openPrivacySettings?.('microphone')}
-          >
+          <span>🎙️ Microphone denied</span>
+          <button className={styles.permBtn} onClick={() => window.electronAPI?.openPrivacySettings?.('microphone')}>
             Fix in System Settings →
           </button>
         </div>
       )}
       {screenDenied && (
         <div className={styles.permBanner}>
-          <span>🖥️ Screen Recording access denied — system audio unavailable</span>
-          <button
-            className={styles.permBtn}
-            onClick={() => window.electronAPI?.openPrivacySettings?.('screen')}
-          >
+          <span>🖥️ Screen Recording denied</span>
+          <button className={styles.permBtn} onClick={() => window.electronAPI?.openPrivacySettings?.('screen')}>
             Fix in System Settings →
           </button>
         </div>
@@ -182,15 +191,9 @@ export default function DesktopPage() {
       {/* ── Main ── */}
       <main className={styles.main}>
         <p className={[styles.statusLabel, isListening ? styles.statusLabelActive : ''].join(' ')}>
-          {permLoading
-            ? 'Requesting permission…'
-            : isListening
-              ? activeCount > 0
-                ? `${activeCount} commentator${activeCount > 1 ? 's' : ''} responding`
-                : 'Listening…'
-              : anyDenied
-                ? 'Permission required'
-                : 'Ready'}
+          {permLoading ? 'Requesting permission…' : isListening
+            ? activeCount > 0 ? `${activeCount} commentator${activeCount > 1 ? 's' : ''} responding` : 'Listening…'
+            : anyDenied ? 'Permission required' : 'Ready'}
         </p>
 
         {/* Orb */}
@@ -200,42 +203,49 @@ export default function DesktopPage() {
           onClick={handleToggle}
           id="btn-desktop-start-stop"
           disabled={!hasApiKey || permLoading}
-          title={
-            !hasApiKey
-              ? 'Add Gemini API key in Settings'
-              : permLoading
-                ? 'Requesting permission…'
-                : isListening
-                  ? 'Stop'
-                  : 'Start'
-          }
         >
           <div className={styles.orbGlow} />
           <div className={styles.orbInner}>
-            {isListening ? (
-              <MicOff size={20} className={styles.orbIcon} />
-            ) : micDenied ? (
-              <MicDenied size={20} className={styles.orbIconWarning} />
-            ) : (
-              <Mic size={20} className={styles.orbIcon} />
-            )}
+            {isListening
+              ? <MicOff size={20} className={styles.orbIcon} />
+              : micDenied
+                ? <MicOff size={20} className={styles.orbIconWarning} />
+                : <Mic size={20} className={styles.orbIcon} />}
             <span className={styles.orbLabel}>
               {permLoading ? '…' : isListening ? 'Stop' : 'Start'}
             </span>
           </div>
         </button>
 
-        {/* Error */}
-        {recognitionError && (
-          <p className={styles.errorMsg}>{recognitionError}</p>
+        {/* Mic device picker */}
+        {audioInputs.length > 1 && (
+          <div className={styles.micPickerRow}>
+            <Mic size={11} className={styles.micPickerIcon} />
+            <select
+              id="select-mic-device"
+              className={styles.micPicker}
+              value={micDeviceId}
+              onChange={(e) => setMicDeviceId(e.target.value)}
+              disabled={isListening}
+              title="Select microphone input"
+            >
+              {audioInputs.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Microphone ${audioInputs.indexOf(d) + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
+
+        {/* Error */}
+        {recognitionError && <p className={styles.errorMsg}>{recognitionError}</p>}
 
         {/* No API key nudge */}
         {!hasApiKey && (
           <p className={styles.nudge}>
-            <button className={styles.nudgeBtn} onClick={() => setSettingsOpen(true)}>
-              Open Settings
-            </button>{' '}to add your Gemini API key
+            <button className={styles.nudgeBtn} onClick={() => setSettingsOpen(true)}>Open Settings</button>
+            {' '}to add your Gemini API key
           </p>
         )}
 
@@ -252,12 +262,9 @@ export default function DesktopPage() {
           </div>
         )}
 
-        {/* Animated waiting dots */}
         {isListening && !hasTranscript && (
           <div className={styles.transcriptPlaceholder}>
-            <div className={styles.listeningDots}>
-              <span /><span /><span />
-            </div>
+            <div className={styles.listeningDots}><span /><span /><span /></div>
             <p>Waiting for audio…</p>
           </div>
         )}
@@ -274,10 +281,7 @@ export default function DesktopPage() {
                 className={[styles.dot, isActive ? styles.dotActive : ''].join(' ')}
                 style={{ '--color': persona.color, background: persona.color, opacity: isActive ? 1 : 0.25 } as React.CSSProperties}
               />
-              <span
-                className={styles.dotLabel}
-                style={{ color: isActive ? persona.color : undefined }}
-              >
+              <span className={styles.dotLabel} style={{ color: isActive ? persona.color : undefined }}>
                 {persona.name}
               </span>
             </div>
