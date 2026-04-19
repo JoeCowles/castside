@@ -39,7 +39,7 @@ export default function LandingPage() {
               id="btn-download-app"
             >
               <Download size={18} />
-              <span>Download for Mac</span>
+              <span>Download</span>
             </a>
             <Link
               href="/app"
@@ -52,7 +52,7 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className={styles.ctaNote}>
-            macOS 13+ &nbsp;·&nbsp; Free desktop app &nbsp;·&nbsp; Screen-share safe
+            macOS, Windows &amp; Linux &nbsp;·&nbsp; Free app &nbsp;·&nbsp; Screen-share safe
           </p>
         </div>
 

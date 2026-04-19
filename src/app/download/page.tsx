@@ -4,10 +4,11 @@
 
 import Link from 'next/link';
 import { Download, ArrowLeft, Terminal, Monitor, Mic } from 'lucide-react';
+import DownloadClient from './DownloadClient';
 
 export const metadata = {
-  title: 'Download Podcommentators — Desktop App for macOS',
-  description: 'Download the Podcommentators desktop app for macOS. AI commentators that are invisible when you share your screen.',
+  title: 'Download Podcommentators',
+  description: 'Download the Podcommentators desktop application for macOS, Windows, and Linux. AI commentators that are invisible when you share your screen.',
 };
 
 export default function DownloadPage() {
@@ -69,11 +70,11 @@ export default function DownloadPage() {
         marginBottom: '16px',
         letterSpacing: '-0.03em',
       }}>
-        Podcommentators for Mac
+        Get Podcommentators
       </h1>
 
       <p style={{ color: '#9299bc', fontSize: '18px', maxWidth: '500px', lineHeight: 1.6, marginBottom: '48px' }}>
-        macOS 13+ &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp; Screen-share invisible
+        Live AI commentators. Screenshare invisible.
       </p>
 
       {/* Feature pills */}
@@ -81,7 +82,6 @@ export default function DownloadPage() {
         {[
           { icon: <Monitor size={14} />, label: 'Invisible to Zoom & Meet' },
           { icon: <Mic size={14} />, label: 'All system audio capture' },
-          { icon: <Terminal size={14} />, label: 'No virtual audio driver needed' },
         ].map((pill) => (
           <span key={pill.label} style={{
             display: 'inline-flex',
@@ -99,45 +99,7 @@ export default function DownloadPage() {
         ))}
       </div>
 
-      {/* Build instructions card */}
-      <div style={{
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.06)',
-        borderRadius: '20px',
-        padding: '32px',
-        maxWidth: '600px',
-        width: '100%',
-        textAlign: 'left',
-        marginBottom: '32px',
-      }}>
-        <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#e8eaf6', marginBottom: '16px' }}>
-          Build from source
-        </h2>
-        <p style={{ fontSize: '14px', color: '#9299bc', marginBottom: '20px', lineHeight: 1.6 }}>
-          A signed .dmg will be available here shortly. In the meantime you can run the desktop app locally in 3 commands:
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {[
-            'git clone https://github.com/your-org/podcommentators',
-            'cd podcommentators && npm install',
-            'npm run electron:dev',
-          ].map((cmd, i) => (
-            <pre key={i} style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: '10px',
-              padding: '12px 16px',
-              fontSize: '13px',
-              color: '#a5f3a0',
-              fontFamily: "'SF Mono', 'Fira Code', monospace",
-              margin: 0,
-              overflowX: 'auto',
-            }}>
-              {cmd}
-            </pre>
-          ))}
-        </div>
-      </div>
+      <DownloadClient />
 
       <Link
         href="/app"
@@ -161,3 +123,4 @@ export default function DownloadPage() {
     </div>
   );
 }
+
