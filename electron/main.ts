@@ -306,9 +306,13 @@ app.whenReady().then(async () => {
 
       let filePath = path.join(NEXT_OUT, pathname);
 
-      // Next.js exports each route as /route/index.html
+      // Next.js App Router exports routes as /route.html, but some asset folders lack extensions.
       if (!path.extname(filePath)) {
-        filePath = path.join(filePath, 'index.html');
+        if (fs.existsSync(`${filePath}.html`)) {
+          filePath = `${filePath}.html`;
+        } else {
+          filePath = path.join(filePath, 'index.html');
+        }
       }
 
       if (!fs.existsSync(filePath)) {
