@@ -114,6 +114,11 @@ function createMainWindow() {
 
   nativeTheme.themeSource = 'dark';
   mainWin.loadURL(MAIN_URL);
+
+  // Force transcription window to float above all apps (same as the overlay)
+  mainWin.setAlwaysOnTop(true, 'screen-saver');
+  mainWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
   // Make the main window invisible to screen capture — same as the overlay.
   // The user still sees and interacts with the app normally on their screen.
   mainWin.setContentProtection(true);
