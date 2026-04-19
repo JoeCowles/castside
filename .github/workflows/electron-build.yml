@@ -1,0 +1,104 @@
+name: Build Electron Installers
+
+# Triggers:
+#   - Push a semver tag (v1.0.0) → builds all platforms and publishes to GitHub Releases
+#   - Manual trigger from the Actions tab → builds without publishing
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to GitHub Releases?'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+
+concurrency:
+  group: electron-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS universal binary (Intel + Apple Silicon in one DMG)
+          - os: macos-14        # Apple Silicon hosted runner
+            platform: mac
+            artifact: 'dist-electron/*.dmg'
+
+          # Windows x64 NSIS installer
+          - os: windows-latest
+            platform: win
+            artifact: 'dist-electron/*.exe'
+
+          # Linux x64 AppImage (runs on any distro without install)
+          - os: ubuntu-22.04
+            platform: linux
+            artifact: 'dist-electron/*.AppImage'
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node.js ───────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── Linux: required native deps for Electron ──────────────────────────
+      - name: Install Linux build deps
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libnss3-dev libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
+            libasound2-dev libpangocairo-1.0-0 libgtk-3-0
+
+      # ── Dependencies ──────────────────────────────────────────────────────
+      - name: Install npm dependencies
+        run: npm ci
+
+      # ── Build Next.js static export ───────────────────────────────────────
+      - name: Export Next.js (static)
+        run: npm run electron:export
+        env:
+          ELECTRON_BUILD: '1'
+
+      # ── Compile Electron TypeScript ───────────────────────────────────────
+      - name: Compile Electron TypeScript
+        run: npm run electron:compile
+
+      # ── electron-builder ──────────────────────────────────────────────────
+      - name: Build installer (${{ matrix.platform }})
+        run: npx electron-builder --${{ matrix.platform }} --publish ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || inputs.publish == 'true' && 'always' || 'never' }}
+        env:
+          # Used by electron-builder to upload to GitHub Releases
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing (optional — remove these if you don't have a cert)
+          # CSC_LINK:           ${{ secrets.MAC_CERT_P12_BASE64 }}
+          # CSC_KEY_PASSWORD:   ${{ secrets.MAC_CERT_PASSWORD }}
+          # Apple notarization (optional)
+          # APPLE_ID:           ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID:      ${{ secrets.APPLE_TEAM_ID }}
+
+      # ── Upload build artifacts ─────────────────────────────────────────────
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.platform }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: warn
+          retention-days: 14

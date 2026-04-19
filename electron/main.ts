@@ -22,14 +22,28 @@ import {
   nativeTheme,
   systemPreferences,
   shell,
+  protocol,
+  net,
 } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 
 const isDev = !app.isPackaged;
-const MAIN_URL = isDev ? 'http://localhost:3000/desktop' : `file://${path.join(__dirname, '../out/desktop/index.html')}`;
-const OVERLAY_HTML = isDev
-  ? 'http://localhost:3000/overlay'
-  : `file://${path.join(__dirname, '../out/overlay/index.html')}`;
+
+// In production the Next.js static export is bundled into the app's resources.
+// We serve it via a custom app:// protocol (secure, same-origin) to avoid
+// the CORS/file:// issues that come with file:// URLs.
+const NEXT_OUT = isDev
+  ? path.join(__dirname, '../../out')          // dev fallback (unused)
+  : path.join(process.resourcesPath, 'out');   // packaged: extraResources/out
+
+const MAIN_URL    = isDev ? 'http://localhost:3000/desktop' : 'app://./desktop';
+const OVERLAY_HTML = isDev ? 'http://localhost:3000/overlay' : 'app://./overlay';
+
+// Register app:// BEFORE app.whenReady() — Electron requires this.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+]);
 
 let mainWin: BrowserWindow | null = null;
 let overlayWin: BrowserWindow | null = null;
@@ -266,6 +280,47 @@ app.whenReady().then(async () => {
     await desktopCapturer.getSources({ types: ['screen'] }).catch(() => {});
     const scrStatusAfter = systemPreferences.getMediaAccessStatus('screen');
     console.log(`[Electron] Screen Recording status: ${scrStatusAfter}`);
+  }
+
+  // ── Serve the Next.js static export via app:// in production ──
+  if (!isDev) {
+    const MIME: Record<string, string> = {
+      '.html': 'text/html',
+      '.js':   'application/javascript',
+      '.css':  'text/css',
+      '.json': 'application/json',
+      '.png':  'image/png',
+      '.jpg':  'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg':  'image/svg+xml',
+      '.ico':  'image/x-icon',
+      '.woff': 'font/woff',
+      '.woff2':'font/woff2',
+      '.ttf':  'font/ttf',
+    };
+
+    protocol.handle('app', (req) => {
+      const url = new URL(req.url);
+      let pathname = url.pathname.replace(/^\/\./, ''); // strip leading "./"
+      if (!pathname || pathname === '/') pathname = '/index';
+
+      let filePath = path.join(NEXT_OUT, pathname);
+
+      // Next.js exports each route as /route/index.html
+      if (!path.extname(filePath)) {
+        filePath = path.join(filePath, 'index.html');
+      }
+
+      if (!fs.existsSync(filePath)) {
+        console.error('[app://] Not found:', filePath);
+        return new Response('Not found', { status: 404 });
+      }
+
+      const ext  = path.extname(filePath).toLowerCase();
+      const mime = MIME[ext] ?? 'application/octet-stream';
+      const data = fs.readFileSync(filePath);
+      return new Response(data, { headers: { 'Content-Type': mime } });
+    });
   }
 
   setupPermissions();

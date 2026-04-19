@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "main": "electron/dist/main.js",
+  "description": "AI podcast commentary companion",
+  "author": "CastSide",
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
@@ -10,8 +12,113 @@
     "lint": "eslint",
     "electron:compile": "tsc --project tsconfig.electron.json",
     "electron:dev": "npm run electron:compile && concurrently --kill-others --names \"next,tsc,electron\" \"next dev --webpack\" \"tsc --project tsconfig.electron.json --watch --preserveWatchOutput\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "next build && npm run electron:compile && electron-builder",
-    "electron:pack": "next build && npm run electron:compile && electron-builder --dir"
+    "electron:export": "cross-env ELECTRON_BUILD=1 next build",
+    "electron:package": "npm run electron:compile && npm run electron:export && electron-builder",
+    "electron:package:mac": "npm run electron:compile && npm run electron:export && electron-builder --mac",
+    "electron:package:win": "npm run electron:compile && npm run electron:export && electron-builder --win",
+    "electron:package:linux": "npm run electron:compile && npm run electron:export && electron-builder --linux",
+    "electron:pack": "npm run electron:compile && npm run electron:export && electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.castside.podcommentators",
+    "productName": "Podcommentators",
+    "copyright": "Copyright © 2025 CastSide",
+    "directories": {
+      "buildResources": "electron/assets",
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "out",
+        "to": "out",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/assets/entitlements.mac.plist",
+      "entitlementsInherit": "electron/assets/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.png",
+      "category": "AudioVideo"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JoeCowles",
+        "repo": "castside"
+      }
+    ]
   },
   "dependencies": {
     "@google/genai": "^1.50.1",
@@ -26,6 +133,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "electron": "^31.7.7",
     "electron-builder": "^24.13.3",
     "eslint": "^9",

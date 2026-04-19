@@ -1,23 +1,25 @@
 import type { NextConfig } from "next";
 
+// When building the Electron distribution, generate a pure static export
+// (no Node.js server needed inside the packaged app).
+// The web deployment to Vercel continues to use the default SSR mode.
+const isElectronBuild = process.env.ELECTRON_BUILD === '1';
+
 const nextConfig: NextConfig = {
-  // Disable React strict mode to prevent double-mounting audio/canvas hooks
   reactStrictMode: false,
+  // Static export for Electron packaging; omit for Vercel SSR
+  ...(isElectronBuild && { output: 'export', distDir: 'out' }),
   images: {
-    // Allow serving avatar images from the public/ directory
     unoptimized: true,
   },
-  // Turbopack config (Next.js 16 dev default)
   turbopack: {
     rules: {
-      // Allow importing .md files as raw strings (persona prompts)
       '*.md': {
         loaders: ['raw-loader'],
         as: '*.js',
       },
     },
   },
-  // Webpack config (production builds)
   webpack: (config) => {
     config.module.rules.push({
       test: /\.md$/,
