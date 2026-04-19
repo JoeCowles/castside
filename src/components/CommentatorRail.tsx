@@ -76,7 +76,7 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
     setCardMeta((prev) => ({ ...prev, [id]: { ...prev[id], slide: 'exiting' } }));
     exitTimers.current[id] = setTimeout(() => {
       delete exitTimers.current[id];
-      setCardMeta((prev) => ({ ...prev, [id]: { ...prev[id], slide: 'hidden' } }));
+      setCardMeta((prev) => ({ ...prev, [id]: { slide: 'hidden', hasBeenActive: false } }));
     }, EXIT_ANIM_MS);
   }, []);
 
