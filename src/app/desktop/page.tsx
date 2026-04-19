@@ -8,8 +8,16 @@ import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
 import { Settings, Mic, MicOff } from 'lucide-react';
 import styles from './desktop.module.css';
+import type { MainWindowElectronAPI } from '@/types/electron';
 
 type PermStatus = { microphone: string; screen: string } | null;
+
+/** Returns window.electronAPI narrowed to MainWindowElectronAPI, or undefined. */
+function getMainApi(): MainWindowElectronAPI | undefined {
+  const api = window.electronAPI;
+  if (!api || ('isOverlay' in api && api.isOverlay)) return undefined;
+  return api as MainWindowElectronAPI;
+}
 
 export default function DesktopPage() {
   const { settings } = useSettings();
@@ -31,11 +39,7 @@ export default function DesktopPage() {
     const isElec = !!window.electronAPI?.isElectron;
     setIsElectron(isElec);
     if (isElec) {
-      const api = window.electronAPI;
-      // Narrow to main-window API — overlay API doesn't have checkPermissions
-      if (api && !('isOverlay' in api && (api as { isOverlay?: boolean }).isOverlay)) {
-        (api as MainWindowElectronAPI).checkPermissions().then(setPermStatus).catch(console.error);
-      }
+      getMainApi()?.checkPermissions().then(setPermStatus).catch(console.error);
     }
 
     // Enumerate audio input devices — works in renderer without IPC
@@ -60,8 +64,9 @@ export default function DesktopPage() {
   }, [micDeviceId]);
 
   const refreshPerms = useCallback(async () => {
-    if (!window.electronAPI?.checkPermissions) return;
-    const p = await window.electronAPI.checkPermissions().catch(() => null);
+    const mainApi = getMainApi();
+    if (!mainApi) return;
+    const p = await mainApi.checkPermissions().catch(() => null);
     setPermStatus(p);
     await refreshDevices();
   }, [refreshDevices]);
@@ -117,19 +122,22 @@ export default function DesktopPage() {
       return;
     }
 
-    if (isElectron && window.electronAPI?.requestMicAccess) {
-      setPermLoading(true);
-      try {
-        const result = await window.electronAPI.requestMicAccess();
-        await refreshPerms(); // also re-enumerates devices with real labels
-        if (result === 'denied') {
-          setPermLoading(false);
-          return;
+    if (isElectron) {
+      const mainApi = getMainApi();
+      if (mainApi?.requestMicAccess) {
+        setPermLoading(true);
+        try {
+          const result = await mainApi.requestMicAccess();
+          await refreshPerms();
+          if (result === 'denied') {
+            setPermLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('[Desktop] Permission request failed:', err);
         }
-      } catch (err) {
-        console.error('[Desktop] Permission request failed:', err);
+        setPermLoading(false);
       }
-      setPermLoading(false);
     }
 
     startListening();
@@ -178,7 +186,7 @@ export default function DesktopPage() {
       {micDenied && (
         <div className={styles.permBanner}>
           <span>🎙️ Microphone denied</span>
-          <button className={styles.permBtn} onClick={() => window.electronAPI?.openPrivacySettings?.('microphone')}>
+          <button className={styles.permBtn} onClick={() => getMainApi()?.openPrivacySettings('microphone')}>
             Fix in System Settings →
           </button>
         </div>
@@ -186,7 +194,7 @@ export default function DesktopPage() {
       {screenDenied && (
         <div className={styles.permBanner}>
           <span>🖥️ Screen Recording denied</span>
-          <button className={styles.permBtn} onClick={() => window.electronAPI?.openPrivacySettings?.('screen')}>
+          <button className={styles.permBtn} onClick={() => getMainApi()?.openPrivacySettings('screen')}>
             Fix in System Settings →
           </button>
         </div>

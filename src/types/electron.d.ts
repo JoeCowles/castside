@@ -6,7 +6,7 @@
 import type { PersonaState, Persona } from './index';
 
 // Main window API surface
-interface MainWindowElectronAPI {
+export interface MainWindowElectronAPI {
   isElectron: true;
   isOverlay?: false;
 
@@ -32,7 +32,7 @@ interface MainWindowElectronAPI {
 }
 
 // Overlay window API surface
-interface OverlayWindowElectronAPI {
+export interface OverlayWindowElectronAPI {
   isElectron: true;
   isOverlay: true;
 
