@@ -254,7 +254,7 @@ function setupIPC() {
 
   // Renderer → main: toggle screenshare visibility (content protection)
   ipcMain.on('set-screenshare-visible', (_event, visible: boolean) => {
-    if (mainWindow) mainWindow.setContentProtection(!visible);
+    if (mainWin) mainWin.setContentProtection(!visible);
     if (overlayWin) overlayWin.setContentProtection(!visible);
   });
 

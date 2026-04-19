@@ -34,6 +34,9 @@ export interface ElectronAPI {
 
   /** Indicate this is running inside Electron */
   isElectron: true;
+
+  /** Toggle whether the app is visible to screen capture tools */
+  setScreenshareVisible: (visible: boolean) => void;
 }
 
 const api: ElectronAPI = {
