@@ -124,6 +124,9 @@ function createMainWindow() {
     });
     electron_1.nativeTheme.themeSource = 'dark';
     mainWin.loadURL(MAIN_URL);
+    // Force transcription window to float above all apps (same as the overlay)
+    mainWin.setAlwaysOnTop(true, 'screen-saver');
+    mainWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     // Make the main window invisible to screen capture — same as the overlay.
     // The user still sees and interacts with the app normally on their screen.
     mainWin.setContentProtection(true);
@@ -172,8 +175,14 @@ function createOverlayWindow() {
             sandbox: false,
         },
     });
-    // ← THE MAGIC: invisible to all screen capture
-    overlayWin.setContentProtection(true);
+    // ← THE MAGIC: invisible to all screen capture (unless DEMO_MODE bypasses it for recording)
+    const isDemoMode = process.env.DEMO_MODE === '1';
+    if (!isDemoMode) {
+        overlayWin.setContentProtection(true);
+    }
+    // Force maximum z-index (floating above everything, even fullscreen presentations)
+    overlayWin.setAlwaysOnTop(true, 'screen-saver');
+    overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     // Start fully click-through; renderer enables hit-testing for card areas
     overlayWin.setIgnoreMouseEvents(true, { forward: true });
     overlayWin.loadURL(OVERLAY_HTML);
@@ -242,6 +251,13 @@ function setupIPC() {
             ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
             : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone';
         electron_1.shell.openExternal(url);
+    });
+    // Renderer → main: toggle screenshare visibility (content protection)
+    electron_1.ipcMain.on('set-screenshare-visible', (_event, visible) => {
+        if (mainWin)
+            mainWin.setContentProtection(!visible);
+        if (overlayWin)
+            overlayWin.setContentProtection(!visible);
     });
     // Relay window visibility for overlay show/hide
     electron_1.ipcMain.on('overlay-set-visible', (_event, visible) => {
