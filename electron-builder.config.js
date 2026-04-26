@@ -6,7 +6,6 @@ module.exports = {
   appId: 'com.podcommentators.app',
   productName: 'Podcommentators',
   copyright: 'Copyright © 2025 Podcommentators',
-  afterSign: 'electron/notarize.js',
 
   // Where electron-builder looks for the compiled main process JS
   directories: {
@@ -33,6 +32,9 @@ module.exports = {
     entitlementsInherit: 'electron/entitlements.mac.plist',
     hardenedRuntime: true,
     gatekeeperAssess: false,
+    notarize: {
+      teamId: process.env.APPLE_TEAM_ID,
+    },
   },
 
   dmg: {

@@ -60,7 +60,8 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "electron/assets/entitlements.mac.plist",
-      "entitlementsInherit": "electron/assets/entitlements.mac.plist"
+      "entitlementsInherit": "electron/assets/entitlements.mac.plist",
+      "notarize": true
     },
     "win": {
       "target": [
