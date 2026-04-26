@@ -46,11 +46,12 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
     return init;
   });
 
-  const [isPeeking, setIsPeeking] = useState(false);
+  const [peekingId, setPeekingId] = useState<string | null>(null);
 
   const dismissTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const exitTimers    = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const prevStreaming  = useRef<Record<string, boolean>>({});
+  const cardRefs      = useRef<Record<string, HTMLDivElement | null>>({});
 
   const slideIn = useCallback((id: string) => {
     if (dismissTimers.current[id]) { clearTimeout(dismissTimers.current[id]); delete dismissTimers.current[id]; }
@@ -107,6 +108,25 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personaStates]);
 
+  // Find the enabled card whose vertical center is closest to the cursor Y
+  const findClosestCard = useCallback((clientY: number): string | null => {
+    let bestId: string | null = null;
+    let bestDist = Infinity;
+    const enabledIds = personas.filter((p) => p.enabled).map((p) => p.id);
+    for (const id of enabledIds) {
+      const el = cardRefs.current[id];
+      if (!el) continue;
+      const meta = cardMeta[id];
+      if (!meta?.hasBeenActive) continue;
+      if (meta.slide === 'visible' || meta.slide === 'exiting') continue;
+      const rect = el.getBoundingClientRect();
+      const centerY = rect.top + rect.height / 2;
+      const dist = Math.abs(clientY - centerY);
+      if (dist < bestDist) { bestDist = dist; bestId = id; }
+    }
+    return bestId;
+  }, [personas, cardMeta]);
+
   useEffect(() => () => {
     Object.values(dismissTimers.current).forEach((t) => clearTimeout(t!));
     Object.values(exitTimers.current).forEach((t) => clearTimeout(t!));
@@ -117,18 +137,14 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
       className={styles.rail}
       style={{ '--peek-px': `${PEEK_PX}px` } as React.CSSProperties}
     >
-      {/* Invisible hover strip at right edge */}
+      {/* Invisible hover strip at right edge — tracks Y to peek nearest card */}
       <div
         className={styles.hoverTrigger}
-        onMouseEnter={() => setIsPeeking(true)}
-        onMouseLeave={() => setIsPeeking(false)}
+        onMouseMove={(e) => setPeekingId(findClosestCard(e.clientY))}
+        onMouseLeave={() => setPeekingId(null)}
       />
 
-      <div
-        className={styles.cardsColumn}
-        onMouseEnter={() => setIsPeeking(true)}
-        onMouseLeave={() => setIsPeeking(false)}
-      >
+      <div className={styles.cardsColumn}>
         {personas.filter((p) => p.enabled).map((persona) => {
           const state = personaStates[persona.id];
           if (!state) return null;
@@ -136,7 +152,7 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
           const meta    = cardMeta[persona.id] ?? { slide: 'hidden', hasBeenActive: false };
           const isVisible = meta.slide === 'visible';
           const isExiting = meta.slide === 'exiting';
-          const canPeek   = isPeeking && meta.hasBeenActive && !isVisible && !isExiting;
+          const canPeek   = peekingId === persona.id && meta.hasBeenActive && !isVisible && !isExiting;
 
           const { waveformState, currentResponse, isStreaming } = state;
           const isThinking = waveformState === 'thinking';
@@ -156,16 +172,19 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
           return (
             <div
               key={persona.id}
+              ref={(el) => { cardRefs.current[persona.id] = el; }}
               className={trackClass}
               style={{ '--persona-color': persona.color } as React.CSSProperties}
+              onMouseEnter={() => { if (canPeek) setPeekingId(persona.id); }}
+              onMouseLeave={() => { if (peekingId === persona.id) setPeekingId(null); }}
             >
               {/* ── Unified card ── */}
               <div className={styles.card}>
-                {/* Close button — appears on hover */}
-                {isVisible && (
+                {/* Close button — appears on hover for visible and peeked cards */}
+                {(isVisible || canPeek) && (
                   <button
                     className={styles.closeBtn}
-                    onClick={(e) => { e.stopPropagation(); manualDismiss(persona.id); }}
+                    onClick={(e) => { e.stopPropagation(); manualDismiss(persona.id); setPeekingId(null); }}
                     aria-label={`Dismiss ${persona.name}`}
                     title="Dismiss"
                   >

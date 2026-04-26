@@ -49,8 +49,14 @@ export interface CommentaryMessage {
   personaIcon: string;
   personaColor: string;
   text: string;
+  quotedText: string;  // statement from transcript that triggered this commentary
   timestamp: number;
   citations: Citation[];
+}
+
+export interface TranscriptHighlight {
+  text: string;   // substring to highlight in transcript
+  color: string;  // persona color
 }
 
 export interface TranscriptChunk {

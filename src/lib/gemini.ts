@@ -6,6 +6,15 @@
 import { GoogleGenAI } from '@google/genai';
 import type { Citation } from '@/types';
 
+/** Extract text from a Gemini generateContent response, using SDK getter with manual fallback. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractText(response: any): string {
+  const viaGetter = (response.text ?? '').trim();
+  const viaParts = (response.candidates?.[0]?.content?.parts ?? [])
+    .map((p: { text?: string }) => p.text ?? '').join('').trim();
+  return viaGetter || viaParts;
+}
+
 // ── Retry helper ───────────────────────────────────────────────────────────
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 1000; // doubles on each attempt: 1s → 2s → 4s
@@ -298,8 +307,8 @@ export async function checkRelevance(
 
     return decision;
   } catch (err) {
-    console.warn(`[Relevance] ⚠️ ${personaName}: all retries failed (defaulting to TRIGGER):`, err);
-    return true;
+    console.warn(`[Relevance] ⚠️ ${personaName}: all retries failed (defaulting to SKIP):`, err);
+    return false;
   }
 }
 
@@ -400,6 +409,142 @@ export async function* streamGeminiWithSearch(
   onCitations?.(citations);
 
   console.log(`[Gemini search stream] ✅ DONE  chunks=${chunkCount}  chars=${totalText.length}`);
+}
+
+/**
+ * Result from a fact-check call — either the model responded with a correction,
+ * or it determined there was nothing wrong.
+ */
+export interface FactCheckResult {
+  responded: boolean;
+  text: string;
+  citations: Citation[];
+}
+
+const FACT_CHECK_SYSTEM = `You are a fact-checker with access to Google Search. Your job is to verify claims in a live podcast transcript.
+
+INSTRUCTIONS:
+1. Identify any specific, verifiable factual claims in the transcript.
+2. Use Google Search to check whether those claims are accurate.
+3. After searching, decide: is there a factual inaccuracy?
+
+RESPONSE FORMAT — you MUST respond with ONLY a JSON object, nothing else:
+
+If you found a factual inaccuracy (a claim that is WRONG according to your search results):
+{"inaccuracy": true, "quoted_claim": "the exact wrong statement from the transcript", "correction": "Your 2-3 sentence correction citing the accurate information. Start with Actually... or To be precise..."}
+
+If everything is accurate, or there are no verifiable claims, or claims are just opinions:
+{"inaccuracy": false}
+
+RULES:
+- Correct facts do NOT count as inaccuracies. If someone says something true, return {"inaccuracy": false}.
+- Opinions, preferences, and subjective statements are NOT factual claims. Return {"inaccuracy": false}.
+- Incomplete or ambiguous fragments should be ignored. Return {"inaccuracy": false}.
+- When in doubt, return {"inaccuracy": false}. Only flag clear, demonstrable errors.
+- Do NOT add interesting facts, trivia, or context. ONLY flag errors.`;
+
+/**
+ * Single-call fact-check with Google Search grounding.
+ * The model searches the web, verifies claims, then returns structured JSON
+ * indicating whether there's an inaccuracy. If not, responded=false and
+ * the card never appears.
+ */
+export async function factCheckWithSearch(
+  _systemInstruction: string,
+  userContent: string,
+  options: StreamGeminiOptions
+): Promise<FactCheckResult> {
+  const {
+    apiKey,
+    model = 'gemini-3.1-pro-preview',
+    temperature = 0.3,
+    maxOutputTokens = 1000,
+    signal,
+    onCitations,
+  } = options;
+
+  if (!apiKey) throw new Error('No API key configured.');
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  console.log(`[Gemini fact-check] 🔍 START  model=${model}`);
+
+  const response = await withRetry(
+    () => ai.models.generateContent({
+      model,
+      contents: userContent,
+      config: {
+        systemInstruction: FACT_CHECK_SYSTEM,
+        temperature,
+        maxOutputTokens,
+        tools: [{ googleSearch: {} }],
+      },
+    }),
+    (r) => !extractText(r),
+    `factCheckWithSearch(${model})`,
+    signal
+  );
+
+  const candidate = response.candidates?.[0];
+  const raw = extractText(response);
+
+  // Strip markdown fences
+  const stripped = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim();
+
+  console.log(`[Gemini fact-check] raw response: "${stripped}"`);
+
+  // Parse the JSON decision
+  let hasInaccuracy = false;
+  let quotedClaim = '';
+  let correction = '';
+  try {
+    const parsed = JSON.parse(stripped) as {
+      inaccuracy?: boolean;
+      quoted_claim?: string;
+      correction?: string;
+    };
+    hasInaccuracy = parsed.inaccuracy === true;
+    quotedClaim = parsed.quoted_claim ?? '';
+    correction = parsed.correction ?? '';
+  } catch (err) {
+    console.warn(`[Gemini fact-check] JSON parse failed — treating as no inaccuracy. raw="${raw}"`, err);
+    onCitations?.([]);
+    return { responded: false, text: '', citations: [] };
+  }
+
+  if (!hasInaccuracy) {
+    console.log('[Gemini fact-check] ✅ No inaccuracy — skipping');
+    onCitations?.([]);
+    return { responded: false, text: '', citations: [] };
+  }
+
+  // Extract citations from grounding metadata
+  const citationMap = new Map<string, Citation>();
+  const groundingMeta = candidate?.groundingMetadata;
+  const groundingChunks = groundingMeta?.groundingChunks;
+  if (groundingChunks) {
+    for (const gc of groundingChunks) {
+      const web = (gc as { web?: { uri?: string; title?: string } }).web;
+      if (web?.uri && web.uri !== 'undefined') {
+        citationMap.set(web.uri, { uri: web.uri, title: web.title ?? web.uri });
+      }
+    }
+  }
+
+  const rawCitations = [...citationMap.values()];
+  const citations = rawCitations.length > 0 ? await resolveCitations(rawCitations) : [];
+  onCitations?.(citations);
+
+  // Build the display text with the [[quoted]] prefix for transcript highlighting
+  const text = quotedClaim
+    ? `[[${quotedClaim}]]\n${correction}`
+    : correction;
+
+  console.log(`[Gemini fact-check] ✅ INACCURACY FOUND  claim="${quotedClaim}"  chars=${text.length}  citations=${citations.length}`);
+  return { responded: true, text, citations };
 }
 
 /**

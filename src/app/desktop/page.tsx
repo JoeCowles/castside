@@ -2,11 +2,13 @@
 // src/app/desktop/page.tsx
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { TranscriptHighlight } from '@/types';
 import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
 import CommentaryHistory from '@/components/CommentaryHistory';
+import HighlightedText from '@/components/HighlightedText';
 import { Settings, Mic, MicOff, Eye, EyeOff, MessageSquare } from 'lucide-react';
 import styles from './desktop.module.css';
 import type { MainWindowElectronAPI } from '@/types/electron';
@@ -88,6 +90,14 @@ export default function DesktopPage() {
     model: settings.model,
     onWaveformStateChange: handleWaveformChange,
   });
+
+  // Build transcript highlights from commentary that includes quoted statements
+  const transcriptHighlights = useMemo<TranscriptHighlight[]>(
+    () => commentaryHistory
+      .filter((m) => m.quotedText)
+      .map((m) => ({ text: m.quotedText, color: m.personaColor })),
+    [commentaryHistory]
+  );
 
   // Broadcast persona states to the overlay window
   useEffect(() => {
@@ -302,7 +312,9 @@ export default function DesktopPage() {
         {hasTranscript && !showCommentary && (
           <div className={styles.transcript}>
             {recentChunks.map((chunk) => (
-              <p key={chunk.id} className={styles.chunk}>{chunk.text}</p>
+              <p key={chunk.id} className={styles.chunk}>
+                <HighlightedText text={chunk.text} highlights={transcriptHighlights} />
+              </p>
             ))}
             {interimText && (
               <p className={styles.interim}>{interimText}<span className={styles.cursor}>▋</span></p>

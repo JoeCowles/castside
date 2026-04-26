@@ -3,7 +3,7 @@
 // podcommentators main page — orchestrates audio/video sources, transcript, and AI persona sidebar.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppMode, AudioSource } from '@/types';
+import { AppMode, AudioSource, TranscriptHighlight } from '@/types';
 import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
@@ -118,6 +118,14 @@ export default function Home() {
     setIsVideoStream(false);
   }, [previewStream, stopListening]);
 
+  // Build transcript highlights from commentary that includes quoted statements
+  const transcriptHighlights = useMemo<TranscriptHighlight[]>(
+    () => commentaryHistory
+      .filter((m) => m.quotedText)
+      .map((m) => ({ text: m.quotedText, color: m.personaColor })),
+    [commentaryHistory]
+  );
+
   const hasApiKey = Boolean(settings.apiKey);
   const hasVideo = Boolean(previewStream) || isVideoStream;
 
@@ -229,6 +237,7 @@ export default function Home() {
                     commentaryCount={commentaryHistory.length}
                     onToggleCommentary={() => setShowCommentary((v) => !v)}
                     showingCommentary={showCommentary}
+                    highlights={transcriptHighlights}
                   />
                   {showCommentary && (
                     <CommentaryHistory messages={commentaryHistory} />
