@@ -83,6 +83,23 @@ jobs:
       - name: Compile Electron TypeScript
         run: npm run electron:compile
 
+      # ── Debug: verify signing identity ──────────────────────────────────
+      - name: Verify signing identity
+        if: matrix.platform == 'mac'
+        run: |
+          echo "$CSC_LINK" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          echo "=== Signing identities ==="
+          security find-identity -v -p codesigning build.keychain
+          rm /tmp/cert.p12
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+
       # ── electron-builder (publish to GitHub Releases on tag push) ────────
       - name: Build installer — publish to GitHub Releases
         if: startsWith(github.ref, 'refs/tags/') || inputs.publish == 'true'
@@ -105,6 +122,30 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # ── Debug: fetch notarization log on failure ───────────────────────────
+      - name: Fetch notarization log
+        if: failure() && matrix.platform == 'mac'
+        run: |
+          echo "=== Fetching notarization log ==="
+          xcrun notarytool history \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "225FW25YH7" 2>&1 | head -20
+          SUBMISSION_ID=$(xcrun notarytool history \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "225FW25YH7" 2>&1 | grep -m1 'id:' | awk '{print $2}')
+          if [ -n "$SUBMISSION_ID" ]; then
+            echo "=== Log for $SUBMISSION_ID ==="
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "225FW25YH7" 2>&1
+          fi
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
 
       # ── Upload build artifacts ─────────────────────────────────────────────
       - name: Upload installer artifact
