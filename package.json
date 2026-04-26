@@ -61,7 +61,9 @@
       "gatekeeperAssess": false,
       "entitlements": "electron/assets/entitlements.mac.plist",
       "entitlementsInherit": "electron/assets/entitlements.mac.plist",
-      "notarize": true
+      "notarize": {
+        "teamId": "225FW25YH7"
+      }
     },
     "win": {
       "target": [
