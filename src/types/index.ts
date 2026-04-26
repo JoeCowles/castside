@@ -49,14 +49,10 @@ export interface CommentaryMessage {
   personaIcon: string;
   personaColor: string;
   text: string;
-  quotedText: string;  // statement from transcript that triggered this commentary
+  quotedText: string;      // statement from transcript that triggered this commentary
+  triggerChunk: string;    // the raw transcript chunk that triggered this response (fallback for highlighting)
   timestamp: number;
   citations: Citation[];
-}
-
-export interface TranscriptHighlight {
-  text: string;   // substring to highlight in transcript
-  color: string;  // persona color
 }
 
 export interface TranscriptChunk {

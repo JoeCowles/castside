@@ -159,7 +159,6 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
           const isActive   = waveformState === 'active';
           const showWave   = isVisible && (isThinking || isActive);
 
-          // Show the full response — CSS handles scrolling for long text
           const displayText = currentResponse;
 
           const trackClass = [

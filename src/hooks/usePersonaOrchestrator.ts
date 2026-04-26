@@ -152,6 +152,7 @@ export function usePersonaOrchestrator({
               personaColor: persona.color,
               text: cleanText,
               quotedText,
+              triggerChunk: latestChunk,
               timestamp: Date.now(),
               citations: result.citations,
             }]);
@@ -220,7 +221,9 @@ export function usePersonaOrchestrator({
           }
           tokenCount++;
           fullResponse += token;
-          updatePersonaState(persona.id, { currentResponse: fullResponse });
+          // Strip [[...]] prefix from displayed text so users don't see brackets
+          const { cleanText: displayText } = parseQuotedStatement(fullResponse);
+          updatePersonaState(persona.id, { currentResponse: displayText });
         }
 
         console.log(`[Orchestrator] ✅ ${persona.name} DONE  tokens=${tokenCount}  chars=${fullResponse.length}  triggerId=${triggerId}`);
@@ -244,6 +247,7 @@ export function usePersonaOrchestrator({
             personaColor: persona.color,
             text: cleanText,
             quotedText,
+            triggerChunk: latestChunk,
             timestamp: Date.now(),
             citations: collectedCitations,
           }]);

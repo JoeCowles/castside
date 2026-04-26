@@ -2,13 +2,11 @@
 // src/app/desktop/page.tsx
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TranscriptHighlight } from '@/types';
 import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
 import CommentaryHistory from '@/components/CommentaryHistory';
-import HighlightedText from '@/components/HighlightedText';
 import { Settings, Mic, MicOff, Eye, EyeOff, MessageSquare } from 'lucide-react';
 import styles from './desktop.module.css';
 import type { MainWindowElectronAPI } from '@/types/electron';
@@ -91,14 +89,6 @@ export default function DesktopPage() {
     onWaveformStateChange: handleWaveformChange,
   });
 
-  // Build transcript highlights from commentary that includes quoted statements
-  const transcriptHighlights = useMemo<TranscriptHighlight[]>(
-    () => commentaryHistory
-      .filter((m) => m.quotedText)
-      .map((m) => ({ text: m.quotedText, color: m.personaColor })),
-    [commentaryHistory]
-  );
-
   // Broadcast persona states to the overlay window
   useEffect(() => {
     if (!isElectron) return;
@@ -121,9 +111,12 @@ export default function DesktopPage() {
     micDeviceId: micDeviceId || undefined,
   });
 
-  // Auto-scroll transcript
+  // Auto-scroll transcript — only when user is near the bottom
+  const desktopScrolledUp = useRef(false);
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!desktopScrolledUp.current) {
+      transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [chunks, interimText]);
 
   // On Start: request mic permission first, then enumerate devices, then start
@@ -165,8 +158,7 @@ export default function DesktopPage() {
     (s) => s.isStreaming || s.waveformState !== 'idle'
   ).length;
   const pulseScale = isListening ? 1 + micLevel * 0.1 : 1;
-  const recentChunks = chunks.slice(-6);
-  const hasTranscript = recentChunks.length > 0 || !!interimText;
+  const hasTranscript = chunks.length > 0 || !!interimText;
 
   const toggleScreenshareVisibility = useCallback(() => {
     const nextVal = !screenshareVisible;
@@ -290,14 +282,14 @@ export default function DesktopPage() {
           </p>
         )}
 
-        {/* Chat toggle */}
-        {isListening && (
+        {/* Chat toggle — visible whenever there's commentary */}
+        {commentaryHistory.length > 0 && (
           <button
             className={[styles.chatToggle, showCommentary ? styles.chatToggleActive : ''].join(' ')}
             onClick={() => setShowCommentary((v) => !v)}
           >
             <MessageSquare size={13} />
-            Chat{commentaryHistory.length > 0 ? ` (${commentaryHistory.length})` : ''}
+            Chat{` (${commentaryHistory.length})`}
           </button>
         )}
 
@@ -310,11 +302,15 @@ export default function DesktopPage() {
 
         {/* Transcript */}
         {hasTranscript && !showCommentary && (
-          <div className={styles.transcript}>
-            {recentChunks.map((chunk) => (
-              <p key={chunk.id} className={styles.chunk}>
-                <HighlightedText text={chunk.text} highlights={transcriptHighlights} />
-              </p>
+          <div
+            className={styles.transcript}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              desktopScrolledUp.current = el.scrollHeight - el.scrollTop - el.clientHeight > 60;
+            }}
+          >
+            {chunks.map((chunk) => (
+              <p key={chunk.id} className={styles.chunk}>{chunk.text}</p>
             ))}
             {interimText && (
               <p className={styles.interim}>{interimText}<span className={styles.cursor}>▋</span></p>

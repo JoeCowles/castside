@@ -189,7 +189,7 @@ function createOverlayWindow() {
 
   // Keep overlay filling the screen if display changes
   screen.on('display-metrics-changed', () => {
-    if (!overlayWin) return;
+    if (!overlayWin || overlayWin.isDestroyed()) return;
     const { width: w, height: h } = screen.getPrimaryDisplay().workAreaSize;
     overlayWin.setBounds({ x: 0, y: 0, width: w, height: h });
   });

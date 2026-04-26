@@ -3,8 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Mic, MessageSquare } from 'lucide-react';
-import { TranscriptChunk, TranscriptHighlight } from '@/types';
-import HighlightedText from './HighlightedText';
+import { TranscriptChunk } from '@/types';
 import styles from './TranscriptPanel.module.css';
 
 interface TranscriptPanelProps {
@@ -15,7 +14,6 @@ interface TranscriptPanelProps {
   commentaryCount?: number;
   onToggleCommentary?: () => void;
   showingCommentary?: boolean;
-  highlights?: TranscriptHighlight[];
 }
 
 function formatTime(ts: number): string {
@@ -31,14 +29,26 @@ export default function TranscriptPanel({
   commentaryCount = 0,
   onToggleCommentary,
   showingCommentary = false,
-  highlights = [],
 }: TranscriptPanelProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const userScrolledUp = useRef(false);
 
-  // Auto-scroll to bottom on new content
+  // Track whether the user has scrolled away from the bottom
   useEffect(() => {
     const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const onScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+      userScrolledUp.current = !atBottom;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Auto-scroll to bottom on new content — only if user hasn't scrolled up
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el && !userScrolledUp.current) el.scrollTop = el.scrollHeight;
   }, [chunks, interimText]);
 
   return (
@@ -82,9 +92,7 @@ export default function TranscriptPanel({
             {chunks.map((chunk) => (
               <div key={chunk.id} className={styles.chunk}>
                 <span className={styles.timestamp}>{formatTime(chunk.timestamp)}</span>
-                <p className={styles.chunkText}>
-                  <HighlightedText text={chunk.text} highlights={highlights} />
-                </p>
+                <p className={styles.chunkText}>{chunk.text}</p>
               </div>
             ))}
             {interimText && (

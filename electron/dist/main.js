@@ -188,7 +188,7 @@ function createOverlayWindow() {
     overlayWin.loadURL(OVERLAY_HTML);
     // Keep overlay filling the screen if display changes
     electron_1.screen.on('display-metrics-changed', () => {
-        if (!overlayWin)
+        if (!overlayWin || overlayWin.isDestroyed())
             return;
         const { width: w, height: h } = electron_1.screen.getPrimaryDisplay().workAreaSize;
         overlayWin.setBounds({ x: 0, y: 0, width: w, height: h });
