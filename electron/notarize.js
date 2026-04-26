@@ -4,8 +4,10 @@ exports.default = async function notarizing(context) {
   const { electronPlatformName, appOutDir } = context;
   if (electronPlatformName !== 'darwin') return;
 
-  if (!process.env.APPLE_ID || !process.env.APPLE_ID_PASSWORD || !process.env.APPLE_TEAM_ID) {
-    console.log('Skipping notarization — APPLE_ID, APPLE_ID_PASSWORD, or APPLE_TEAM_ID not set');
+  const applePassword = process.env.APPLE_APP_SPECIFIC_PASSWORD || process.env.APPLE_ID_PASSWORD;
+
+  if (!process.env.APPLE_ID || !applePassword || !process.env.APPLE_TEAM_ID) {
+    console.log('Skipping notarization — APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, or APPLE_TEAM_ID not set');
     return;
   }
 
@@ -17,7 +19,7 @@ exports.default = async function notarizing(context) {
     appBundleId: 'com.podcommentators.app',
     appPath: `${appOutDir}/${appName}.app`,
     appleId: process.env.APPLE_ID,
-    appleIdPassword: process.env.APPLE_ID_PASSWORD,
+    appleIdPassword: applePassword,
     teamId: process.env.APPLE_TEAM_ID,
   });
 
