@@ -6,6 +6,7 @@ module.exports = {
   appId: 'com.podcommentators.app',
   productName: 'Podcommentators',
   copyright: 'Copyright © 2025 Podcommentators',
+  afterSign: 'electron/notarize.js',
 
   // Where electron-builder looks for the compiled main process JS
   directories: {
