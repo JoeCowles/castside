@@ -78,6 +78,7 @@ function createSafePersona(persona: Partial<Persona>): Persona {
     systemPrompt: persona.systemPrompt || fallback.systemPrompt,
     relevancePrompt: persona.relevancePrompt || fallback.relevancePrompt,
     useSearch: persona.useSearch ?? fallback.useSearch,
+    skipRelevance: persona.skipRelevance ?? fallback.skipRelevance,
   };
 }
 

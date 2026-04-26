@@ -32,6 +32,7 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
   const [personas, setPersonas] = useState<Persona[]>(initialSettings.personas.map((persona) => ({ ...persona })));
   const [youtubeIngestUrl, setYoutubeIngestUrl] = useState(initialSettings.youtubeIngestUrl);
   const [youtubeStreamKey, setYoutubeStreamKey] = useState(initialSettings.youtubeStreamKey);
+  const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
   const [selectedPersonaId, setSelectedPersonaId] = useState(initialSettings.personas[0]?.id ?? '');
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showYoutubeKey, setShowYoutubeKey] = useState(false);
@@ -309,50 +310,54 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
                     />
                   </div>
 
-                  <div className={styles.group}>
-                    <label className={styles.label}>Relevance Prompt</label>
-                    <textarea
-                      className={styles.textarea}
-                      rows={5}
-                      value={selectedPersona.relevancePrompt}
-                      onChange={(e) => handlePersonaField('relevancePrompt', e.target.value)}
-                    />
-                  </div>
+                  {!selectedPersona.skipRelevance && (
+                    <div className={styles.group}>
+                      <label className={styles.label}>Relevance Prompt</label>
+                      <textarea
+                        className={styles.textarea}
+                        rows={5}
+                        value={selectedPersona.relevancePrompt}
+                        onChange={(e) => handlePersonaField('relevancePrompt', e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
           </div>
 
-          <div className={styles.group}>
-            <label className={styles.label}>YouTube Live</label>
-            <p className={styles.hint}>
-              podcommentators can now save your YouTube ingest details and jump you into Live Control Room.
-              Actual RTMPS publishing still needs an encoder/relay layer, because this app runs entirely in the browser.
-            </p>
-            <div className={styles.inputRow}>
-              <input
-                className={styles.input}
-                value={youtubeIngestUrl}
-                onChange={(e) => setYoutubeIngestUrl(e.target.value)}
-                placeholder="rtmps://a.rtmps.youtube.com/live2"
-              />
-              <a className={styles.secondaryBtnLink} href="https://studio.youtube.com/channel/UC/livestreaming" target="_blank" rel="noopener noreferrer">
-                Open YouTube
-              </a>
+          {!isElectron && (
+            <div className={styles.group}>
+              <label className={styles.label}>YouTube Live</label>
+              <p className={styles.hint}>
+                podcommentators can now save your YouTube ingest details and jump you into Live Control Room.
+                Actual RTMPS publishing still needs an encoder/relay layer, because this app runs entirely in the browser.
+              </p>
+              <div className={styles.inputRow}>
+                <input
+                  className={styles.input}
+                  value={youtubeIngestUrl}
+                  onChange={(e) => setYoutubeIngestUrl(e.target.value)}
+                  placeholder="rtmps://a.rtmps.youtube.com/live2"
+                />
+                <a className={styles.secondaryBtnLink} href="https://studio.youtube.com/channel/UC/livestreaming" target="_blank" rel="noopener noreferrer">
+                  Open YouTube
+                </a>
+              </div>
+              <div className={styles.inputRow}>
+                <input
+                  className={styles.input}
+                  type={showYoutubeKey ? 'text' : 'password'}
+                  value={youtubeStreamKey}
+                  onChange={(e) => setYoutubeStreamKey(e.target.value)}
+                  placeholder="YouTube stream key"
+                />
+                <button className={styles.iconBtn} onClick={() => setShowYoutubeKey((value) => !value)} type="button">
+                  {showYoutubeKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
-            <div className={styles.inputRow}>
-              <input
-                className={styles.input}
-                type={showYoutubeKey ? 'text' : 'password'}
-                value={youtubeStreamKey}
-                onChange={(e) => setYoutubeStreamKey(e.target.value)}
-                placeholder="YouTube stream key"
-              />
-              <button className={styles.iconBtn} onClick={() => setShowYoutubeKey((value) => !value)} type="button">
-                {showYoutubeKey ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         <div className={styles.modalFooter}>

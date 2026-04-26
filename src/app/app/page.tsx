@@ -9,6 +9,7 @@ import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import AudioSourcePanel from '@/components/AudioSourcePanel';
 import TranscriptPanel from '@/components/TranscriptPanel';
+import CommentaryHistory from '@/components/CommentaryHistory';
 import CommentatorRail from '@/components/CommentatorRail';
 import VideoDisplay from '@/components/VideoDisplay';
 import SettingsModal from '@/components/SettingsModal';
@@ -20,6 +21,7 @@ export default function Home() {
   const [mode, setMode] = useState<AppMode>('enhanced');
   const [source, setSource] = useState<AudioSource>('mic');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showCommentary, setShowCommentary] = useState(false);
 
   // Detect Electron context — must be done in useEffect to avoid SSR hydration mismatch
   const [isElectron, setIsElectron] = useState(false);
@@ -45,7 +47,7 @@ export default function Home() {
   const handleWaveformChange = useCallback(() => { /* personaStates are the source of truth */ }, []);
 
   // ── Persona orchestrator ─────────────────────────────────────────────────
-  const { personaStates, onChunkCommitted } = usePersonaOrchestrator({
+  const { personaStates, commentaryHistory, onChunkCommitted } = usePersonaOrchestrator({
     personas: enabledPersonas,
     wordThreshold: settings.wordThreshold,
     apiKey: settings.apiKey,
@@ -224,7 +226,13 @@ export default function Home() {
                     interimText={interimText}
                     isListening={isListening}
                     onClear={clearTranscript}
+                    commentaryCount={commentaryHistory.length}
+                    onToggleCommentary={() => setShowCommentary((v) => !v)}
+                    showingCommentary={showCommentary}
                   />
+                  {showCommentary && (
+                    <CommentaryHistory messages={commentaryHistory} />
+                  )}
                 </div>
               )}
             </div>

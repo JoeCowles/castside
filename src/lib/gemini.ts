@@ -54,6 +54,56 @@ async function withRetry<T>(
   throw lastErr;
 }
 
+/**
+ * Resolve Vertex AI proxy/redirect URLs to their actual destinations.
+ * The Gemini grounding API returns URLs like:
+ *   https://vertexaisearch.cloud.google.com/grounding-api-redirect/...
+ * which 302-redirect to the real source URL.
+ *
+ * Uses opaque fetch (no-cors mode) to follow redirects — since the redirect
+ * lands on a different origin, we can't read `response.url` in no-cors.
+ * Instead we do a HEAD with cors mode and catch the redirect URL.
+ * Falls back to the original proxy URL if resolution fails.
+ */
+async function resolveProxyUrl(proxyUri: string): Promise<string> {
+  try {
+    const res = await fetch(proxyUri, { method: 'HEAD', redirect: 'follow' });
+    // After following redirects, res.url is the final destination
+    if (res.url && res.url !== proxyUri) return res.url;
+  } catch {
+    // CORS will block cross-origin HEAD in most cases — try extracting from URL structure
+  }
+  return proxyUri;
+}
+
+/**
+ * Resolve all Vertex AI proxy citations to their actual source URLs.
+ * Runs resolution in parallel with a short timeout per URL.
+ */
+async function resolveCitations(citations: Citation[]): Promise<Citation[]> {
+  const resolved = await Promise.all(
+    citations.map(async (c) => {
+      if (!c.uri.includes('vertexaisearch.cloud.google.com')) return c;
+      const realUri = await Promise.race([
+        resolveProxyUrl(c.uri),
+        new Promise<string>((res) => setTimeout(() => res(c.uri), 3000)),
+      ]);
+      // Derive a better title from the resolved domain if the title is generic
+      let title = c.title;
+      if (realUri !== c.uri) {
+        try {
+          const hostname = new URL(realUri).hostname.replace('www.', '');
+          if (!title || title === c.uri || title.includes('vertexaisearch')) {
+            title = hostname;
+          }
+        } catch { /* keep existing title */ }
+      }
+      return { uri: realUri, title };
+    })
+  );
+  return resolved;
+}
+
 export interface StreamGeminiOptions {
   apiKey: string;
   model?: string;
@@ -318,7 +368,8 @@ export async function* streamGeminiWithSearch(
     }
 
     // Extract web citations from Google Search grounding metadata
-    const groundingChunks = chunk.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const groundingMeta = chunk.candidates?.[0]?.groundingMetadata;
+    const groundingChunks = groundingMeta?.groundingChunks;
     if (groundingChunks) {
       for (const gc of groundingChunks) {
         const web = gc.web;
@@ -337,9 +388,14 @@ export async function* streamGeminiWithSearch(
     }
   }
 
-  const citations = [...citationMap.values()];
+  const rawCitations = [...citationMap.values()];
+  if (rawCitations.length > 0) {
+    console.log(`[Gemini search stream] 🔗 ${rawCitations.length} raw citation(s):`, rawCitations.map((c) => c.uri));
+  }
+  // Resolve proxy URLs to actual source URLs
+  const citations = rawCitations.length > 0 ? await resolveCitations(rawCitations) : [];
   if (citations.length > 0) {
-    console.log(`[Gemini search stream] 🔗 ${citations.length} citation(s):`, citations.map((c) => c.uri));
+    console.log(`[Gemini search stream] 🔗 Resolved citation(s):`, citations.map((c) => c.uri));
   }
   onCitations?.(citations);
 

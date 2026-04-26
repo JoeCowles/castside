@@ -14,7 +14,7 @@
 //   5. Set waveformState = 'idle', apply cooldown
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Persona, PersonaState, TranscriptChunk, WaveformState } from '@/types';
+import { CommentaryMessage, Persona, PersonaState, TranscriptChunk, WaveformState } from '@/types';
 import { checkRelevance, streamGemini, streamGeminiWithSearch } from '@/lib/gemini';
 
 interface UsePersonaOrchestratorOptions {
@@ -27,6 +27,7 @@ interface UsePersonaOrchestratorOptions {
 
 interface UsePersonaOrchestratorReturn {
   personaStates: Record<string, PersonaState>;
+  commentaryHistory: CommentaryMessage[];
   onChunkCommitted: (chunkText: string, allChunks: TranscriptChunk[]) => void;
 }
 
@@ -52,6 +53,7 @@ export function usePersonaOrchestrator({
   onWaveformStateChange,
 }: UsePersonaOrchestratorOptions): UsePersonaOrchestratorReturn {
   const [personaStates, setPersonaStates] = useState<PersonaStatesMap>({});
+  const [commentaryHistory, setCommentaryHistory] = useState<CommentaryMessage[]>([]);
 
   const wordBufferRef = useRef<string[]>([]);
   const abortControllersRef = useRef<Record<string, AbortController>>({});
@@ -72,13 +74,17 @@ export function usePersonaOrchestrator({
       const triggerId = `${persona.id}-${Date.now()}`;
 
       // ── Stage 1: Relevance gate (uses full 10-chunk context) ─────────────
-      // Passing the full rolling window lets the model understand the broader
-      // conversation, not just the most recent buffered chunk.
-      const relevant = await checkRelevance(persona.relevancePrompt, fullContext, latestChunk, apiKey, model, persona.name);
+      // Personas with skipRelevance=true handle relevance in their main prompt
+      // (e.g. Theo returns "PASS" when there's nothing to fact-check).
+      if (!persona.skipRelevance) {
+        const relevant = await checkRelevance(persona.relevancePrompt, fullContext, latestChunk, apiKey, model, persona.name);
 
-      if (!relevant) {
-        console.log(`[Orchestrator] ⏭ ${persona.name} skipped (relevance=NO)  triggerId=${triggerId}`);
-        return; // No state change, no cooldown consumed
+        if (!relevant) {
+          console.log(`[Orchestrator] ⏭ ${persona.name} skipped (relevance=NO)  triggerId=${triggerId}`);
+          return; // No state change, no cooldown consumed
+        }
+      } else {
+        console.log(`[Orchestrator] ⏩ ${persona.name} skipping relevance check (skipRelevance=true)  triggerId=${triggerId}`);
       }
 
       // ── Stage 2: Mark as streaming ────────────────────────────────────────
@@ -110,6 +116,7 @@ export function usePersonaOrchestrator({
         let fullResponse = '';
         let firstToken = true;
         let tokenCount = 0;
+        let collectedCitations: import('@/types').Citation[] = [];
 
         for await (const token of streamFn(persona.systemPrompt, userContent, {
           apiKey,
@@ -117,9 +124,9 @@ export function usePersonaOrchestrator({
           temperature: persona.temperature,
           maxOutputTokens: persona.maxTokens,
           signal: controller.signal,
-          // Only used by streamGeminiWithSearch; streamGemini ignores it
           onCitations: (citations) => {
             if (citations.length > 0) {
+              collectedCitations = citations;
               updatePersonaState(persona.id, { citations });
             }
           },
@@ -137,8 +144,31 @@ export function usePersonaOrchestrator({
 
         console.log(`[Orchestrator] ✅ ${persona.name} DONE  tokens=${tokenCount}  chars=${fullResponse.length}  triggerId=${triggerId}`);
         isStreamingRef.current[persona.id] = false;
+
+        // Personas with skipRelevance may return "PASS" to indicate nothing to report
+        const isPass = persona.skipRelevance && fullResponse.trim().toUpperCase() === 'PASS';
+        if (isPass) {
+          console.log(`[Orchestrator] ⏭ ${persona.name} returned PASS — discarding  triggerId=${triggerId}`);
+          updatePersonaState(persona.id, { isStreaming: false, waveformState: 'idle', currentResponse: '' });
+          onWaveformStateChange(persona.id, 'idle');
+          return;
+        }
+
         updatePersonaState(persona.id, { isStreaming: false, waveformState: 'idle' });
         onWaveformStateChange(persona.id, 'idle');
+
+        if (fullResponse.trim()) {
+          setCommentaryHistory((prev) => [...prev, {
+            id: triggerId,
+            personaId: persona.id,
+            personaName: persona.name,
+            personaIcon: persona.icon,
+            personaColor: persona.color,
+            text: fullResponse,
+            timestamp: Date.now(),
+            citations: collectedCitations,
+          }]);
+        }
       } catch (err) {
         isStreamingRef.current[persona.id] = false;
         if ((err as Error).name === 'AbortError') {
@@ -228,5 +258,5 @@ export function usePersonaOrchestrator({
     });
   }, [personas]);
 
-  return { personaStates, onChunkCommitted };
+  return { personaStates, commentaryHistory, onChunkCommitted };
 }

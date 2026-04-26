@@ -6,7 +6,8 @@ import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
-import { Settings, Mic, MicOff, Eye, EyeOff } from 'lucide-react';
+import CommentaryHistory from '@/components/CommentaryHistory';
+import { Settings, Mic, MicOff, Eye, EyeOff, MessageSquare } from 'lucide-react';
 import styles from './desktop.module.css';
 import type { MainWindowElectronAPI } from '@/types/electron';
 
@@ -23,6 +24,7 @@ export default function DesktopPage() {
   const { settings } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [screenshareVisible, setScreenshareVisible] = useState(false);
+  const [showCommentary, setShowCommentary] = useState(false);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
   const streamAudioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
@@ -79,7 +81,7 @@ export default function DesktopPage() {
 
   const handleWaveformChange = useCallback(() => {}, []);
 
-  const { personaStates, onChunkCommitted } = usePersonaOrchestrator({
+  const { personaStates, commentaryHistory, onChunkCommitted } = usePersonaOrchestrator({
     personas: enabledPersonas,
     wordThreshold: settings.wordThreshold,
     apiKey: settings.apiKey,
@@ -278,8 +280,26 @@ export default function DesktopPage() {
           </p>
         )}
 
+        {/* Chat toggle */}
+        {isListening && (
+          <button
+            className={[styles.chatToggle, showCommentary ? styles.chatToggleActive : ''].join(' ')}
+            onClick={() => setShowCommentary((v) => !v)}
+          >
+            <MessageSquare size={13} />
+            Chat{commentaryHistory.length > 0 ? ` (${commentaryHistory.length})` : ''}
+          </button>
+        )}
+
+        {/* Commentary history */}
+        {showCommentary && (
+          <div className={styles.commentaryArea}>
+            <CommentaryHistory messages={commentaryHistory} />
+          </div>
+        )}
+
         {/* Transcript */}
-        {hasTranscript && (
+        {hasTranscript && !showCommentary && (
           <div className={styles.transcript}>
             {recentChunks.map((chunk) => (
               <p key={chunk.id} className={styles.chunk}>{chunk.text}</p>
@@ -291,7 +311,7 @@ export default function DesktopPage() {
           </div>
         )}
 
-        {isListening && !hasTranscript && (
+        {isListening && !hasTranscript && !showCommentary && (
           <div className={styles.transcriptPlaceholder}>
             <div className={styles.listeningDots}><span /><span /><span /></div>
             <p>Waiting for audio…</p>

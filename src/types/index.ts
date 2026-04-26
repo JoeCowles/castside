@@ -24,6 +24,7 @@ export interface Persona {
   systemPrompt: string;
   relevancePrompt: string; // loaded from prompts/<id>/relevance.md
   useSearch: boolean;      // enable Google Search grounding for this persona
+  skipRelevance: boolean;  // skip separate relevance check; let the main prompt decide whether to respond
 }
 
 export interface Citation {
@@ -39,6 +40,17 @@ export interface PersonaState {
   lastTriggeredAt: number;
   error: string | null;
   citations: Citation[];  // web sources from Google Search grounding
+}
+
+export interface CommentaryMessage {
+  id: string;
+  personaId: string;
+  personaName: string;
+  personaIcon: string;
+  personaColor: string;
+  text: string;
+  timestamp: number;
+  citations: Citation[];
 }
 
 export interface TranscriptChunk {

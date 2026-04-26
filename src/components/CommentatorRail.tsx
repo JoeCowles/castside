@@ -194,7 +194,10 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
                     <div className={styles.citations}>
                       {state.citations.slice(0, 4).map((c: Citation) => {
                         let domain = '';
+                        const isProxy = c.uri.includes('vertexaisearch.cloud.google.com');
                         try { domain = new URL(c.uri).hostname.replace('www.', ''); } catch { domain = c.uri; }
+                        const displayDomain = isProxy ? (c.title || 'Source') : domain;
+                        const faviconDomain = isProxy ? '' : domain;
                         return (
                           <a
                             key={c.uri}
@@ -204,15 +207,17 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
                             className={styles.citationChip}
                             title={c.title}
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
-                              alt=""
-                              width={12}
-                              height={12}
-                              className={styles.citationFavicon}
-                            />
-                            <span className={styles.citationDomain}>{domain}</span>
+                            {faviconDomain && (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={`https://www.google.com/s2/favicons?domain=${faviconDomain}&sz=16`}
+                                alt=""
+                                width={12}
+                                height={12}
+                                className={styles.citationFavicon}
+                              />
+                            )}
+                            <span className={styles.citationDomain}>{displayDomain}</span>
                           </a>
                         );
                       })}

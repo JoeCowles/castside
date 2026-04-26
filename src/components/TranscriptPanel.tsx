@@ -2,7 +2,7 @@
 // src/components/TranscriptPanel.tsx
 
 import { useEffect, useRef } from 'react';
-import { Mic } from 'lucide-react';
+import { Mic, MessageSquare } from 'lucide-react';
 import { TranscriptChunk } from '@/types';
 import styles from './TranscriptPanel.module.css';
 
@@ -11,6 +11,9 @@ interface TranscriptPanelProps {
   interimText: string;
   isListening: boolean;
   onClear: () => void;
+  commentaryCount?: number;
+  onToggleCommentary?: () => void;
+  showingCommentary?: boolean;
 }
 
 function formatTime(ts: number): string {
@@ -23,6 +26,9 @@ export default function TranscriptPanel({
   interimText,
   isListening,
   onClear,
+  commentaryCount = 0,
+  onToggleCommentary,
+  showingCommentary = false,
 }: TranscriptPanelProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -46,6 +52,15 @@ export default function TranscriptPanel({
         </div>
         <div className={styles.headerRight}>
           <span className={styles.chunkCount}>{chunks.length} segments</span>
+          {onToggleCommentary && (
+            <button
+              className={[styles.commentaryBtn, showingCommentary ? styles.commentaryBtnActive : ''].join(' ')}
+              onClick={onToggleCommentary}
+            >
+              <MessageSquare size={14} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+              Chat{commentaryCount > 0 ? ` (${commentaryCount})` : ''}
+            </button>
+          )}
           <button className={styles.clearBtn} onClick={onClear} disabled={chunks.length === 0}>
             Clear
           </button>

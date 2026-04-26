@@ -87,6 +87,28 @@
 .clearBtn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #e8eaf6; }
 .clearBtn:disabled { opacity: 0.3; cursor: not-allowed; }
 
+.commentaryBtn {
+  font-size: 12px;
+  font-weight: 500;
+  color: #5a5e7a;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.commentaryBtn:hover { background: rgba(255,255,255,0.1); color: #e8eaf6; }
+.commentaryBtnActive {
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.3);
+  background: rgba(167, 139, 250, 0.1);
+}
+.commentaryBtnActive:hover {
+  background: rgba(167, 139, 250, 0.15);
+  color: #c4b5fd;
+}
+
 /* ── Body ── */
 
 .body {

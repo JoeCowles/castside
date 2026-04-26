@@ -182,9 +182,16 @@ export function useTranscript({
 
     recorder.onstop = async () => {
       if (fatalErrorRef.current) return;
-      if (audioChunks.length === 0) return;
-      const blob = new Blob(audioChunks, { type: mimeType });
+
+      // Snapshot and clear chunks, then restart IMMEDIATELY to avoid audio gaps
+      const pending = [...audioChunks];
       audioChunks.length = 0;
+      if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
+        try { recorder.start(); } catch { /* stopped */ }
+      }
+
+      if (pending.length === 0) return;
+      const blob = new Blob(pending, { type: mimeType });
 
       try {
         const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
@@ -197,11 +204,6 @@ export function useTranscript({
         if (!fatalErrorRef.current) {
           setRecognitionError(`Transcription error: ${(err as Error).message}`);
         }
-      }
-
-      // Restart recording for continuous listening
-      if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
-        try { recorder.start(); } catch { /* stopped */ }
       }
     };
 
@@ -322,9 +324,14 @@ export function useTranscript({
       };
 
       recorder.onstop = async () => {
-        if (audioChunks.length === 0) return;
-        const blob = new Blob(audioChunks, { type: mimeType });
+        const pending = [...audioChunks];
         audioChunks.length = 0;
+        // Restart immediately to avoid audio gaps
+        if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
+          try { recorder.start(); } catch { /* stopped */ }
+        }
+        if (pending.length === 0) return;
+        const blob = new Blob(pending, { type: mimeType });
         try {
           const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
           const ignore = ['there is no speech.', '[silence]', '[music]', ''];
@@ -336,10 +343,10 @@ export function useTranscript({
 
       const interval = setInterval(() => {
         if (recorder.state === 'recording') {
+          recorder.requestData();
           recorder.stop();
-          recorder.start();
         }
-      }, 4000);
+      }, 10000);
 
       recorder.start();
       mediaRecorderRef.current = recorder;
@@ -484,12 +491,19 @@ export function useTranscript({
 
     recorder.onstop = async () => {
       if (fatalErrorRef.current) return;
-      if (audioChunks.length === 0) {
+
+      // Snapshot and clear chunks, then restart IMMEDIATELY to avoid audio gaps
+      const pending = [...audioChunks];
+      audioChunks.length = 0;
+      if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
+        try { recorder.start(); } catch { /* stopped */ }
+      }
+
+      if (pending.length === 0) {
         console.warn('[Audio] recorder.onstop: no chunks — silence?');
         return;
       }
-      const blob = new Blob(audioChunks, { type: mimeType });
-      audioChunks.length = 0;
+      const blob = new Blob(pending, { type: mimeType });
       console.log('[Audio] Sending', blob.size, 'bytes to ElevenLabs');
 
       try {
@@ -504,11 +518,6 @@ export function useTranscript({
         if (!fatalErrorRef.current) {
           setRecognitionError(`Transcription error: ${(err as Error).message}`);
         }
-      }
-
-      // Restart for continuous capture
-      if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
-        try { recorder.start(); } catch { /* stopped */ }
       }
     };
 
@@ -603,9 +612,16 @@ export function useTranscript({
 
     recorder.onstop = async () => {
       if (fatalErrorRef.current) return;
-      if (audioChunks.length === 0) return;
-      const blob = new Blob(audioChunks, { type: mimeType });
+
+      // Snapshot and clear chunks, then restart IMMEDIATELY to avoid audio gaps
+      const pending = [...audioChunks];
       audioChunks.length = 0;
+      if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
+        try { recorder.start(); } catch { /* stopped */ }
+      }
+
+      if (pending.length === 0) return;
+      const blob = new Blob(pending, { type: mimeType });
 
       try {
         const text = await transcribeWithElevenLabs(blob, elevenLabsKey);
@@ -618,10 +634,6 @@ export function useTranscript({
         if (!fatalErrorRef.current) {
           setRecognitionError(`Transcription error: ${(err as Error).message}`);
         }
-      }
-
-      if (!fatalErrorRef.current && mediaRecorderRef.current === recorder) {
-        try { recorder.start(); } catch { /* stopped */ }
       }
     };
 
