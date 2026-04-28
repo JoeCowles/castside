@@ -50,7 +50,8 @@ export interface CommentaryMessage {
   personaColor: string;
   text: string;
   quotedText: string;      // statement from transcript that triggered this commentary
-  triggerChunk: string;    // the raw transcript chunk that triggered this response (fallback for highlighting)
+  triggerChunk: string;    // the raw transcript chunk that triggered this response
+  triggerChunkIds: string[]; // IDs of transcript chunks that were highlighted for this response
   timestamp: number;
   citations: Citation[];
 }
@@ -61,6 +62,9 @@ export interface TranscriptChunk {
   timestamp: number;
   isFinal: boolean;
 }
+
+/** Maps a transcript chunk ID to the persona color that's highlighting it */
+export type ChunkHighlights = Record<string, string>;
 
 export interface AppSettings {
   apiKey: string;

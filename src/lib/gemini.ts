@@ -589,6 +589,88 @@ export async function transcribeWithGemini(
   return (response.text ?? '').trim();
 }
 
+/**
+ * Agent Orchestrator — single Gemini call that decides which persona (if any)
+ * should respond to the latest transcript chunk.
+ *
+ * Returns the persona ID to trigger, or null if none should respond.
+ */
+export async function selectAgent(
+  personas: { id: string; name: string; role: string }[],
+  fullContext: string,
+  latestChunk: string,
+  apiKey: string,
+  model = 'gemini-3-flash-preview'
+): Promise<string | null> {
+  if (!apiKey || personas.length === 0) return null;
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const personaList = personas
+    .map((p) => `- "${p.id}": ${p.name} — ${p.role}`)
+    .join('\n');
+
+  const systemPrompt = `You are an agent orchestrator for a live podcast commentary system. Your job is to read the latest transcript chunk and decide which ONE commentator (if any) should respond.
+
+Available commentators:
+${personaList}
+
+RULES:
+- Pick the SINGLE most relevant commentator, or "none" if no commentator should respond.
+- Pick a fact-checker if the chunk contains a specific, verifiable factual claim (statistic, date, named entity with a factual assertion).
+- Pick a news commentator if the chunk references a specific recent event, person, or organization that has been in major news recently.
+- Pick a comedy/entertainment commentator if the chunk has something genuinely funny or absurd to riff on.
+- Pick an opposite-viewpoint commentator if the speaker makes a strong opinion or one-sided argument that deserves a counterpoint.
+- Pick a context commentator if there's an interesting cultural or historical reference worth expanding on.
+- Default to "none" — most chunks should NOT trigger any commentator. Only fire when there's a clear, high-value reason.
+- Never pick a commentator for greetings, filler, small talk, silence, or incomplete fragments.
+
+Reply with ONLY valid JSON: {"agent": "<persona_id>"} or {"agent": "none"}`;
+
+  const userPrompt = `Full transcript so far:\n"${fullContext}"\n\nLatest new chunk:\n"${latestChunk}"`;
+
+  console.groupCollapsed(`[Orchestrator] 🎯 selectAgent  personas=${personas.length}  chunkWords=${latestChunk.split(/\s+/).length}`);
+  console.log(userPrompt.slice(0, 500));
+  console.groupEnd();
+
+  try {
+    const response = await withRetry(
+      () => ai.models.generateContent({
+        model,
+        contents: userPrompt,
+        config: { systemInstruction: systemPrompt, maxOutputTokens: 1000, temperature: 0 },
+      }),
+      (r) => !extractText(r),
+      `selectAgent(${model})`
+    );
+
+    const raw = extractText(response);
+    const stripped = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '')
+      .trim();
+
+    const parsed = JSON.parse(stripped) as { agent?: string };
+    const agentId = parsed.agent ?? 'none';
+
+    console.log(
+      `%c[Orchestrator] ${agentId === 'none' ? '⏭ none selected' : `✅ selected: ${agentId}`}`,
+      `color:${agentId === 'none' ? '#f87171' : '#34d399'}; font-weight:bold`
+    );
+
+    if (agentId === 'none') return null;
+    // Validate that the selected ID is one of the available personas
+    if (!personas.some((p) => p.id === agentId)) {
+      console.warn(`[Orchestrator] ⚠ Unknown agent ID "${agentId}" — ignoring`);
+      return null;
+    }
+    return agentId;
+  } catch (err) {
+    console.warn('[Orchestrator] ⚠ selectAgent failed — skipping this chunk:', err);
+    return null;
+  }
+}
+
 export async function validateGeminiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
   try {
     const gen = streamGemini('You are helpful.', 'Say "ok".', {

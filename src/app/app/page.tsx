@@ -47,7 +47,7 @@ export default function Home() {
   const handleWaveformChange = useCallback(() => { /* personaStates are the source of truth */ }, []);
 
   // ── Persona orchestrator ─────────────────────────────────────────────────
-  const { personaStates, commentaryHistory, onChunkCommitted } = usePersonaOrchestrator({
+  const { personaStates, commentaryHistory, chunkHighlights, onChunkCommitted } = usePersonaOrchestrator({
     personas: enabledPersonas,
     wordThreshold: settings.wordThreshold,
     apiKey: settings.apiKey,
@@ -121,8 +121,8 @@ export default function Home() {
   const hasApiKey = Boolean(settings.apiKey);
   const hasVideo = Boolean(previewStream) || isVideoStream;
 
-  // Transcript is only shown in mic mode while actively listening
-  const showTranscript = source === 'mic' && isListening;
+  // Show transcript whenever listening or there are existing chunks
+  const showTranscript = isListening || chunks.length > 0;
 
   return (
     <div className={styles.app}>
@@ -229,6 +229,7 @@ export default function Home() {
                     commentaryCount={commentaryHistory.length}
                     onToggleCommentary={() => setShowCommentary((v) => !v)}
                     showingCommentary={showCommentary}
+                    chunkHighlights={chunkHighlights}
                   />
                   {showCommentary && (
                     <CommentaryHistory messages={commentaryHistory} />

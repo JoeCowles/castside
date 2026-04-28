@@ -92,7 +92,7 @@
   flex-direction: row;
   align-items: stretch;
   gap: 0;
-  background: rgba(10, 10, 22, 0.88);
+  background: rgba(10, 10, 22, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px 4px 14px 14px;
   backdrop-filter: blur(14px);
@@ -102,8 +102,8 @@
   overflow: visible; /* allow close btn to poke out */
   /* persona-colour left border */
   border-left: 3px solid var(--persona-color, #4f8ef7);
-  max-width: 380px;
-  min-width: 220px;
+  max-width: 440px;
+  min-width: 240px;
 }
 
 /* ── × dismiss button — top-right corner, appears on card hover ── */
@@ -166,9 +166,9 @@
 
 .personaName {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #e8eaf6;
+  color: #f0f1fa;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -185,15 +185,16 @@
 }
 
 .responseText {
-  font-size: 12px;
-  line-height: 1.55;
-  color: #cdd0e8;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #e8eaf6;
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 180px;
+  max-height: 220px;
   overflow-y: auto;
   scrollbar-width: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .responseText::-webkit-scrollbar { display: none; }

@@ -79,7 +79,7 @@ export const DEFAULT_PERSONAS: Persona[] = [
   {
     id: 'troll',
     name: 'Rex',
-    role: 'Cynical Commentator',
+    role: 'Devil\'s Advocate',
     icon: 'Flame',
     color: '#F87171',
     cooldown: 10,

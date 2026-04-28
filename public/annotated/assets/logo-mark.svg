@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  
+  <text x="32" y="46" text-anchor="middle" font-family="Newsreader, Iowan Old Style, Charter, Georgia, serif" font-weight="600" font-size="44" fill="#1F1D1A">A</text>
+  
+  <path d="M 32 8&#xA;           C 46 8.5, 56 18, 56.5 32&#xA;           C 57 46, 46 55.5, 32 56&#xA;           C 18 56.5, 8 46, 8 32&#xA;           C 8 18.2, 18.5 8.2, 32 8 Z" stroke="#C8462C" stroke-width="2.2" stroke-linecap="round" fill="none"></path>
+</svg>

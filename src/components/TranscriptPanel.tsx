@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Mic, MessageSquare } from 'lucide-react';
-import { TranscriptChunk } from '@/types';
+import { ChunkHighlights, TranscriptChunk } from '@/types';
 import styles from './TranscriptPanel.module.css';
 
 interface TranscriptPanelProps {
@@ -14,6 +14,7 @@ interface TranscriptPanelProps {
   commentaryCount?: number;
   onToggleCommentary?: () => void;
   showingCommentary?: boolean;
+  chunkHighlights?: ChunkHighlights;
 }
 
 function formatTime(ts: number): string {
@@ -29,6 +30,7 @@ export default function TranscriptPanel({
   commentaryCount = 0,
   onToggleCommentary,
   showingCommentary = false,
+  chunkHighlights = {},
 }: TranscriptPanelProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
@@ -89,12 +91,23 @@ export default function TranscriptPanel({
           </div>
         ) : (
           <>
-            {chunks.map((chunk) => (
-              <div key={chunk.id} className={styles.chunk}>
-                <span className={styles.timestamp}>{formatTime(chunk.timestamp)}</span>
-                <p className={styles.chunkText}>{chunk.text}</p>
-              </div>
-            ))}
+            {chunks.map((chunk) => {
+              const highlightColor = chunkHighlights[chunk.id];
+              return (
+                <div
+                  key={chunk.id}
+                  className={[styles.chunk, highlightColor ? styles.chunkHighlighted : ''].filter(Boolean).join(' ')}
+                  style={highlightColor ? {
+                    '--highlight-color': highlightColor,
+                    borderLeft: `3px solid ${highlightColor}`,
+                    background: `color-mix(in srgb, ${highlightColor} 10%, transparent)`,
+                  } as React.CSSProperties : undefined}
+                >
+                  <span className={styles.timestamp}>{formatTime(chunk.timestamp)}</span>
+                  <p className={styles.chunkText}>{chunk.text}</p>
+                </div>
+              );
+            })}
             {interimText && (
               <div className={[styles.chunk, styles.interim].join(' ')}>
                 <span className={styles.timestamp}>…</span>

@@ -16,8 +16,8 @@
 //   5. Set waveformState = 'idle', apply cooldown
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CommentaryMessage, Persona, PersonaState, TranscriptChunk, WaveformState } from '@/types';
-import { checkRelevance, streamGemini, streamGeminiWithSearch, factCheckWithSearch } from '@/lib/gemini';
+import { ChunkHighlights, CommentaryMessage, Persona, PersonaState, TranscriptChunk, WaveformState } from '@/types';
+import { selectAgent, streamGemini, streamGeminiWithSearch, factCheckWithSearch } from '@/lib/gemini';
 
 interface UsePersonaOrchestratorOptions {
   personas: Persona[];
@@ -30,6 +30,7 @@ interface UsePersonaOrchestratorOptions {
 interface UsePersonaOrchestratorReturn {
   personaStates: Record<string, PersonaState>;
   commentaryHistory: CommentaryMessage[];
+  chunkHighlights: ChunkHighlights;
   onChunkCommitted: (chunkText: string, allChunks: TranscriptChunk[]) => void;
 }
 
@@ -63,6 +64,7 @@ export function usePersonaOrchestrator({
 }: UsePersonaOrchestratorOptions): UsePersonaOrchestratorReturn {
   const [personaStates, setPersonaStates] = useState<PersonaStatesMap>({});
   const [commentaryHistory, setCommentaryHistory] = useState<CommentaryMessage[]>([]);
+  const [chunkHighlights, setChunkHighlights] = useState<ChunkHighlights>({});
 
   const wordBufferRef = useRef<string[]>([]);
   const abortControllersRef = useRef<Record<string, AbortController>>({});
@@ -90,18 +92,28 @@ export function usePersonaOrchestrator({
     return `\n\nYour previous statements (do NOT repeat these):\n${lines}`;
   }, []);
 
+  /** Highlight transcript chunks with a persona's color */
+  const highlightChunks = useCallback((chunkIds: string[], color: string) => {
+    setChunkHighlights((prev) => {
+      const next = { ...prev };
+      chunkIds.forEach((id) => { next[id] = color; });
+      return next;
+    });
+  }, []);
+
   const triggerPersona = useCallback(
-    async (persona: Persona, latestChunk: string, fullContext: string) => {
+    async (persona: Persona, latestChunk: string, fullContext: string, triggerChunkIds: string[]) => {
       if (!apiKey) return;
 
       const triggerId = `${persona.id}-${Date.now()}`;
 
       const priorStatements = buildPriorStatements(persona.id);
-      const userContent = `Conversation context (last ~10 exchanges):\n"${fullContext}"\n\nLatest new content:\n"${latestChunk}"${priorStatements}\n\nProvide your commentary now.`;
+      const userContent = `Full transcript:\n"${fullContext}"\n\nLatest new content:\n"${latestChunk}"${priorStatements}\n\nProvide your commentary now.`;
 
-      // ── Stage 1: Relevance gate ─────────────────────────────────────────
-      // For skipRelevance personas (e.g. Theo), run the fact-check gate BEFORE
-      // showing any UI, so the card never appears if there's nothing to report.
+      // Highlight the trigger chunks with this persona's color
+      highlightChunks(triggerChunkIds, persona.color);
+
+      // ── Fact-check path (Theo) ──────────────────────────────────────────
       if (persona.skipRelevance) {
         isStreamingRef.current[persona.id] = true;
         try {
@@ -116,16 +128,13 @@ export function usePersonaOrchestrator({
 
           if (!result.responded) {
             console.log(`[Orchestrator] ⏭ ${persona.name} no inaccuracy found — skipping  triggerId=${triggerId}`);
-            return; // No UI state change at all — card never appears
+            return;
           }
 
-          // Inaccuracy found — show the card with the result
           console.log(`[Orchestrator] ▶ ${persona.name} found inaccuracy — showing card  triggerId=${triggerId}`);
           const { quotedText, cleanText } = parseQuotedStatement(result.text);
           const cooldownUntil = Date.now() + persona.cooldown * 1000;
 
-          // Set the card to 'active' with all data in a single state update
-          // so citations and response text are not lost to React batching.
           updatePersonaState(persona.id, {
             isStreaming: true,
             waveformState: 'active',
@@ -137,7 +146,6 @@ export function usePersonaOrchestrator({
           });
           onWaveformStateChange(persona.id, 'active');
 
-          // Settle the card after a brief moment so the slide-in animation plays
           setTimeout(() => {
             updatePersonaState(persona.id, { isStreaming: false, waveformState: 'idle' });
             onWaveformStateChange(persona.id, 'idle');
@@ -153,6 +161,7 @@ export function usePersonaOrchestrator({
               text: cleanText,
               quotedText,
               triggerChunk: latestChunk,
+              triggerChunkIds,
               timestamp: Date.now(),
               citations: result.citations,
             }]);
@@ -165,14 +174,7 @@ export function usePersonaOrchestrator({
         return;
       }
 
-      // For normal personas, run the relevance check before showing UI
-      const relevant = await checkRelevance(persona.relevancePrompt, fullContext, latestChunk, apiKey, model, persona.name);
-      if (!relevant) {
-        console.log(`[Orchestrator] ⏭ ${persona.name} skipped (relevance=NO)  triggerId=${triggerId}`);
-        return;
-      }
-
-      // ── Stage 2: Mark as active ─────────────────────────────────────────
+      // ── Standard streaming path (orchestrator already decided this persona) ──
       console.log(`[Orchestrator] ▶ triggerPersona  id=${triggerId}  persona=${persona.name}  useSearch=${persona.useSearch}`);
       isStreamingRef.current[persona.id] = true;
 
@@ -192,7 +194,6 @@ export function usePersonaOrchestrator({
       onWaveformStateChange(persona.id, 'thinking');
 
       try {
-        // ── Standard streaming path ─────────────────────────────────────────
         const streamFn = persona.useSearch ? streamGeminiWithSearch : streamGemini;
 
         let fullResponse = '';
@@ -221,7 +222,6 @@ export function usePersonaOrchestrator({
           }
           tokenCount++;
           fullResponse += token;
-          // Strip [[...]] prefix from displayed text so users don't see brackets
           const { cleanText: displayText } = parseQuotedStatement(fullResponse);
           updatePersonaState(persona.id, { currentResponse: displayText });
         }
@@ -229,7 +229,6 @@ export function usePersonaOrchestrator({
         console.log(`[Orchestrator] ✅ ${persona.name} DONE  tokens=${tokenCount}  chars=${fullResponse.length}  triggerId=${triggerId}`);
         isStreamingRef.current[persona.id] = false;
 
-        // Parse [[quoted statement]] from the response
         const { quotedText, cleanText } = parseQuotedStatement(fullResponse);
         if (quotedText) {
           updatePersonaState(persona.id, { isStreaming: false, waveformState: 'idle', currentResponse: cleanText });
@@ -248,6 +247,7 @@ export function usePersonaOrchestrator({
             text: cleanText,
             quotedText,
             triggerChunk: latestChunk,
+            triggerChunkIds,
             timestamp: Date.now(),
             citations: collectedCitations,
           }]);
@@ -267,46 +267,69 @@ export function usePersonaOrchestrator({
         onWaveformStateChange(persona.id, 'idle');
       }
     },
-    [apiKey, model, updatePersonaState, onWaveformStateChange, buildPriorStatements]
+    [apiKey, model, updatePersonaState, onWaveformStateChange, buildPriorStatements, highlightChunks]
   );
 
   const triggerAll = useCallback(
-    (latestChunk: string, allChunks: TranscriptChunk[]) => {
-      // Build a rolling window of the last 10 chunks as the full context.
-      // This is passed to both the relevance gate and the commentary prompt.
-      const last10 = allChunks.slice(-10).map((c) => c.text);
-      // Append the latest buffered chunk (may not be committed yet)
-      if (!last10.includes(latestChunk)) last10.push(latestChunk);
-      const fullContext = last10.join(' ');
+    async (latestChunk: string, allChunks: TranscriptChunk[]) => {
+      // Pass the FULL transcript as context (not just last 10)
+      const allTexts = allChunks.map((c) => c.text);
+      if (!allTexts.some((t) => t === latestChunk)) allTexts.push(latestChunk);
+      const fullContext = allTexts.join(' ');
 
       const now = Date.now();
 
+      // Filter to personas that are available (enabled, not on cooldown, not streaming)
+      const available = personas.filter((p) => {
+        if (!p.enabled) return false;
+        const state = personaStates[p.id];
+        if (state && now < state.cooldownUntil) {
+          console.log(`[Orchestrator]   ⏳ ${p.name} on cooldown (${Math.ceil((state.cooldownUntil - now) / 1000)}s remaining)`);
+          return false;
+        }
+        if (isStreamingRef.current[p.id]) {
+          console.log(`[Orchestrator]   💬 ${p.name} still streaming — skipping`);
+          return false;
+        }
+        return true;
+      });
+
+      if (available.length === 0) {
+        console.log('[Orchestrator] 🟡 No available personas — skipping');
+        return;
+      }
+
       console.log(
         `[Orchestrator] 🟡 triggerAll  newWords=${latestChunk.split(/\s+/).length}` +
-        `  contextChunks=${last10.length}  contextWords=${fullContext.split(/\s+/).length}` +
-        `  enabledPersonas=${personas.filter(p => p.enabled).length}`
+        `  contextChunks=${allTexts.length}  contextWords=${fullContext.split(/\s+/).length}` +
+        `  availablePersonas=${available.length}`
       );
 
-      personas
-        .filter((p) => p.enabled)
-        .forEach((persona, index) => {
-          const state = personaStates[persona.id];
-          // Skip if on cooldown
-          if (state && now < state.cooldownUntil) {
-            console.log(`[Orchestrator]   ⏳ ${persona.name} on cooldown (${Math.ceil((state.cooldownUntil - now) / 1000)}s remaining)`);
-            return;
-          }
-          // Skip if currently streaming — use the ref for synchronous accuracy
-          if (isStreamingRef.current[persona.id]) {
-            console.log(`[Orchestrator]   💬 ${persona.name} still streaming — skipping`);
-            return;
-          }
-          console.log(`[Orchestrator]   ✅ ${persona.name} queued for relevance check (delay=${index * 200}ms)`);
-          // Stagger to avoid rate limits; relevance check happens before full trigger
-          setTimeout(() => triggerPersona(persona, latestChunk, fullContext), index * 200);
-        });
+      // Collect IDs of the most recent chunks that comprise the latest buffered text
+      // (the last few chunks that contributed words to this trigger)
+      const recentChunkIds = allChunks.slice(-3).map((c) => c.id);
+
+      // ── Agent Orchestrator: single call to select which persona to trigger ──
+      const selectedId = await selectAgent(
+        available.map((p) => ({ id: p.id, name: p.name, role: p.role })),
+        fullContext,
+        latestChunk,
+        apiKey,
+        model
+      );
+
+      if (!selectedId) {
+        console.log('[Orchestrator] ⏭ Orchestrator selected none — skipping');
+        return;
+      }
+
+      const persona = available.find((p) => p.id === selectedId);
+      if (!persona) return;
+
+      console.log(`[Orchestrator] ✅ Orchestrator selected: ${persona.name} (${persona.id})`);
+      triggerPersona(persona, latestChunk, fullContext, recentChunkIds);
     },
-    [personas, personaStates, triggerPersona]
+    [personas, personaStates, triggerPersona, apiKey, model]
   );
 
   const onChunkCommitted = useCallback(
@@ -341,5 +364,5 @@ export function usePersonaOrchestrator({
     });
   }, [personas]);
 
-  return { personaStates, commentaryHistory, onChunkCommitted };
+  return { personaStates, commentaryHistory, chunkHighlights, onChunkCommitted };
 }
