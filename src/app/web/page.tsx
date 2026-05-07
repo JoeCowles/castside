@@ -211,9 +211,6 @@ export default function WebPage() {
             <button className={styles.settingsBtn} onClick={() => setSettingsOpen(true)} aria-label="Settings">
               <Settings size={15} />
             </button>
-            <button className={styles.stopBtn} onClick={handleToggle}>
-              <MicOff size={14} /> Stop
-            </button>
           </div>
         </header>
 
@@ -227,15 +224,20 @@ export default function WebPage() {
             <div className={styles.dragHandle} onMouseDown={onDragStart}>
               <GripVertical size={14} />
               <span>Transcript</span>
-              {commentaryHistory.length > 0 && (
-                <button
-                  className={[styles.panelTab, showCommentary ? styles.panelTabActive : ''].join(' ')}
-                  onClick={() => setShowCommentary((v) => !v)}
-                >
-                  <MessageSquare size={11} />
-                  {commentaryHistory.length}
+              <div className={styles.panelActions} onMouseDown={(e) => e.stopPropagation()}>
+                {commentaryHistory.length > 0 && (
+                  <button
+                    className={[styles.panelTab, showCommentary ? styles.panelTabActive : ''].join(' ')}
+                    onClick={() => setShowCommentary((v) => !v)}
+                  >
+                    <MessageSquare size={11} />
+                    {commentaryHistory.length}
+                  </button>
+                )}
+                <button className={[styles.stopBtn, styles.panelStopBtn].join(' ')} onClick={handleToggle}>
+                  <MicOff size={14} /> Stop
                 </button>
-              )}
+              </div>
             </div>
 
             {showCommentary ? (

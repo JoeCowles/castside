@@ -584,6 +584,12 @@
   color: #fca5a5;
 }
 
+.panelStopBtn {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
 /* ── Floating draggable transcript panel ── */
 .floatingPanel {
   position: absolute;
@@ -618,11 +624,17 @@
 
 .dragHandle:active { cursor: grabbing; }
 
+.panelActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .panelTab {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
   padding: 2px 8px;
   font-size: 10px;
   font-weight: 500;
