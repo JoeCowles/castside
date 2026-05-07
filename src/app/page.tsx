@@ -1,5 +1,4 @@
-import Link from 'next/link';
-import { Mic, Brain, Zap, Download, ArrowRight, Monitor } from 'lucide-react';
+import { Mic, Brain, Zap, Download, ArrowRight } from 'lucide-react';
 import styles from './landing.module.css';
 
 export const metadata = {
@@ -41,15 +40,13 @@ export default function LandingPage() {
               <Download size={18} />
               <span>Download</span>
             </a>
-            <Link
-              href="/app"
+            <a
+              href="/web"
               className={styles.webBtn}
-              id="btn-continue-web"
             >
-              <Monitor size={16} />
-              <span>Continue on Web</span>
-              <ArrowRight size={14} className={styles.webBtnArrow} />
-            </Link>
+              <span>Use on the web</span>
+              <ArrowRight size={16} className={styles.webBtnArrow} />
+            </a>
           </div>
           <p className={styles.ctaNote}>
             macOS, Windows &amp; Linux &nbsp;·&nbsp; Free app &nbsp;·&nbsp; Screen-share safe

@@ -100,26 +100,6 @@ export default function DownloadPage() {
       </div>
 
       <DownloadClient />
-
-      <Link
-        href="/app"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '14px 28px',
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: '100px',
-          color: '#6b7280',
-          textDecoration: 'none',
-          fontSize: '15px',
-          transition: 'all 0.2s',
-        }}
-        id="btn-use-web-version"
-      >
-        Or continue on the web →
-      </Link>
     </div>
   );
 }

@@ -11,41 +11,30 @@
   z-index: 200;
 }
 
-/* Invisible 48px hover strip at right edge */
-.hoverTrigger {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 48px;
-  pointer-events: auto;
-  z-index: 1;
-}
-
-/* Column anchored to right edge, centered vertically */
+/* Column anchored to right edge, stacks top → bottom */
 .cardsColumn {
   position: absolute;
   right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  align-items: flex-end; /* right-align every card */
-  padding: 24px 0;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 16px 0;
+  overflow: hidden;
 }
 
 
 /* ─────────────────────────────────────────────────────────────────────────
    Card track — the sliding wrapper. Off-screen right by default.
-   Because cards are right-aligned, translateX(calc(100%+24px)) pushes
-   them just off the right edge of the viewport.
    ───────────────────────────────────────────────────────────────────────── */
 
 .cardTrack {
   pointer-events: none;
   transform: translateX(calc(100% + 24px));
   opacity: 0;
+  flex-shrink: 0;
   /* Quick disappear when returning to hidden */
   transition:
     transform 0.25s cubic-bezier(0.4, 0, 1, 1),
@@ -58,36 +47,27 @@
   opacity: 1;
   pointer-events: auto;
   transition:
-    transform 0.62s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity   0.28s ease;
+    transform 0.5s cubic-bezier(0.34, 1.4, 0.64, 1),
+    opacity   0.25s ease;
 }
 
 /* ── Slide OUT — smooth ease-in ── */
 .cardExiting {
   transform: translateX(calc(100% + 24px));
   opacity: 0;
+  pointer-events: none;
   transition:
-    transform 0.46s cubic-bezier(0.4, 0, 1, 1),
-    opacity   0.34s ease;
-}
-
-/* ── Peek — show full card on edge hover ── */
-.cardPeeking {
-  transform: translateX(0);
-  opacity: 1;
-  pointer-events: auto;
-  transition:
-    transform 0.38s cubic-bezier(0.34, 1.4, 0.64, 1),
-    opacity   0.22s ease;
+    transform 0.42s cubic-bezier(0.4, 0, 1, 1),
+    opacity   0.3s ease;
 }
 
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Unified card — glassmorphism panel, one piece (no inner animations)
+   Unified card — glassmorphism panel
    ───────────────────────────────────────────────────────────────────────── */
 
 .card {
-  position: relative; /* needed for close button absolute positioning */
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -99,14 +79,13 @@
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  overflow: visible; /* allow close btn to poke out */
-  /* persona-colour left border */
+  overflow: visible;
   border-left: 3px solid var(--persona-color, #4f8ef7);
   max-width: 440px;
   min-width: 240px;
 }
 
-/* ── × dismiss button — top-right corner, appears on card hover ── */
+/* ── × dismiss button ── */
 .closeBtn {
   position: absolute;
   top: -8px;
@@ -124,8 +103,6 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-
-  /* Hidden by default, revealed when parent card is hovered */
   opacity: 0;
   transform: scale(0.7);
   transition: opacity 0.18s ease, transform 0.18s ease, background 0.15s ease, color 0.15s ease;
@@ -191,7 +168,7 @@
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 220px;
+  max-height: 180px;
   overflow-y: auto;
   scrollbar-width: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);

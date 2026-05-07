@@ -12,7 +12,7 @@ let cachedSettingsSnapshot: AppSettings | null = null;
 export const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   elevenLabsKey: '',
-  model: 'gemini-3.1-pro-preview',
+  model: 'gemini-3.1-flash-lite-preview',
   wordThreshold: 50,
   personas: makeDefaultPersonas(),
   youtubeIngestUrl: 'rtmps://a.rtmps.youtube.com/live2',
@@ -50,9 +50,11 @@ function migratePersonas(raw: unknown): Persona[] {
   };
 
   if (Array.isArray(maybeSettings.personas) && maybeSettings.personas.length > 0) {
-    return maybeSettings.personas.map((persona) => ({
-      ...createSafePersona(persona),
-    }));
+    // Filter out removed personas (e.g. Milo/fred)
+    const REMOVED_IDS = new Set(['fred']);
+    return maybeSettings.personas
+      .filter((persona) => !REMOVED_IDS.has(persona.id))
+      .map((persona) => ({ ...createSafePersona(persona) }));
   }
 
   const legacyStates = maybeSettings.personaStates ?? {};

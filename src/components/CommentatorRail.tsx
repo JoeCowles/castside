@@ -1,20 +1,9 @@
 'use client';
 // src/components/CommentatorRail.tsx
 //
-// Fixed right-edge overlay — works in all modes (mic, camera, stream).
-//
-// Card layout inside the sliding track (flex row, left → right):
-//   [content: text + name/role]  |  [avatar]  |  [waveform]
-//
-// This way, when the card slides in from the right:
-//   1. Waveform (rightmost when active) enters viewport first
-//   2. Avatar enters next — the "face" appears
-//   3. Name/role and text arrive last
-//
-// There are NO loading animations / thinking dots — just the avatar glow.
-//
-// Auto-dismiss: 30 s after persona goes idle
-// Peek: hovering within 48px of right edge shows avatar + name
+// Message-feed overlay — cards pop in from the right, stack top → bottom.
+// Oldest card at the top is dismissed first (FIFO), everything slides up.
+// Multiple cards from the same persona can coexist.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Citation, Persona, PersonaState } from '@/types';
@@ -22,75 +11,92 @@ import WaveformCanvas from './WaveformCanvas';
 import { IconResolver } from './IconResolver';
 import styles from './CommentatorRail.module.css';
 
-const DISMISS_DELAY_MS = 30_000;
-const EXIT_ANIM_MS     = 460;
-// px of the card visible during peek (avatar slot ~60px + name block ~110px)
-const PEEK_PX = 172;
+const DISMISS_DELAY_MS = 15_000; // auto-dismiss after 15s idle
+const EXIT_ANIM_MS     = 420;
+const MAX_VISIBLE       = 4;     // max cards on screen
 
 interface CommentatorRailProps {
   personas: Persona[];
   personaStates: Record<string, PersonaState>;
 }
 
-type CardSlide = 'hidden' | 'visible' | 'exiting';
-
-interface CardMeta {
-  slide: CardSlide;
-  hasBeenActive: boolean;
+interface FeedCard {
+  id: string;
+  personaId: string;
+  text: string;
+  citations: Citation[];
+  streaming: boolean;
+  slide: 'entering' | 'visible' | 'exiting';
 }
 
 export default function CommentatorRail({ personas, personaStates }: CommentatorRailProps) {
-  const [cardMeta, setCardMeta] = useState<Record<string, CardMeta>>(() => {
-    const init: Record<string, CardMeta> = {};
-    personas.forEach((p) => { init[p.id] = { slide: 'hidden', hasBeenActive: false }; });
-    return init;
-  });
+  const [feed, setFeed] = useState<FeedCard[]>([]);
+  const prevStreaming = useRef<Record<string, boolean>>({});
+  const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const exitTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const columnRef = useRef<HTMLDivElement | null>(null);
 
-  const [peekingId, setPeekingId] = useState<string | null>(null);
-
-  const dismissTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const exitTimers    = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const prevStreaming  = useRef<Record<string, boolean>>({});
-  const cardRefs      = useRef<Record<string, HTMLDivElement | null>>({});
-
-  const slideIn = useCallback((id: string) => {
-    if (dismissTimers.current[id]) { clearTimeout(dismissTimers.current[id]); delete dismissTimers.current[id]; }
-    if (exitTimers.current[id])    { clearTimeout(exitTimers.current[id]);    delete exitTimers.current[id]; }
-    setCardMeta((prev) => ({ ...prev, [id]: { slide: 'visible', hasBeenActive: true } }));
-  }, []);
-
-  const scheduleExit = useCallback((id: string) => {
-    if (dismissTimers.current[id]) return;
-    dismissTimers.current[id] = setTimeout(() => {
-      delete dismissTimers.current[id];
-      setCardMeta((prev) => ({ ...prev, [id]: { ...prev[id], slide: 'exiting' } }));
-      exitTimers.current[id] = setTimeout(() => {
-        delete exitTimers.current[id];
-        setCardMeta((prev) => ({ ...prev, [id]: { ...prev[id], slide: 'hidden' } }));
-      }, EXIT_ANIM_MS);
-    }, DISMISS_DELAY_MS);
-  }, []);
-
-  // Manual dismiss: immediately start exit animation (card returns on next trigger)
-  const manualDismiss = useCallback((id: string) => {
-    if (dismissTimers.current[id]) { clearTimeout(dismissTimers.current[id]); delete dismissTimers.current[id]; }
-    setCardMeta((prev) => ({ ...prev, [id]: { ...prev[id], slide: 'exiting' } }));
-    exitTimers.current[id] = setTimeout(() => {
-      delete exitTimers.current[id];
-      setCardMeta((prev) => ({ ...prev, [id]: { slide: 'hidden', hasBeenActive: false } }));
-    }, EXIT_ANIM_MS);
-  }, []);
-
+  // Build a map for quick persona lookup
+  const personaMap = useRef<Map<string, Persona>>(new Map());
   useEffect(() => {
-    setCardMeta((prev) => {
-      const next: Record<string, CardMeta> = {};
-      personas.forEach((persona) => {
-        next[persona.id] = prev[persona.id] ?? { slide: 'hidden', hasBeenActive: false };
-      });
-      return next;
-    });
+    personaMap.current.clear();
+    personas.forEach((p) => personaMap.current.set(p.id, p));
   }, [personas]);
 
+  // Dismiss the oldest visible card (FIFO)
+  const dismissOldest = useCallback(() => {
+    setFeed((prev) => {
+      const oldest = prev.find((c) => c.slide === 'visible' && !c.streaming);
+      if (!oldest) return prev;
+      // Clear its dismiss timer
+      const dt = dismissTimers.current.get(oldest.id);
+      if (dt) { clearTimeout(dt); dismissTimers.current.delete(oldest.id); }
+      // Start exit animation
+      const updated = prev.map((c) =>
+        c.id === oldest.id ? { ...c, slide: 'exiting' as const } : c
+      );
+      exitTimers.current.set(oldest.id, setTimeout(() => {
+        exitTimers.current.delete(oldest.id);
+        setFeed((f) => f.filter((c) => c.id !== oldest.id));
+      }, EXIT_ANIM_MS));
+      return updated;
+    });
+  }, []);
+
+  // Schedule auto-dismiss for a card
+  const scheduleDismiss = useCallback((cardId: string) => {
+    if (dismissTimers.current.has(cardId)) return;
+    dismissTimers.current.set(cardId, setTimeout(() => {
+      dismissTimers.current.delete(cardId);
+      setFeed((prev) => {
+        const card = prev.find((c) => c.id === cardId);
+        if (!card || card.slide === 'exiting') return prev;
+        const updated = prev.map((c) =>
+          c.id === cardId ? { ...c, slide: 'exiting' as const } : c
+        );
+        exitTimers.current.set(cardId, setTimeout(() => {
+          exitTimers.current.delete(cardId);
+          setFeed((f) => f.filter((c) => c.id !== cardId));
+        }, EXIT_ANIM_MS));
+        return updated;
+      });
+    }, DISMISS_DELAY_MS));
+  }, []);
+
+  // Manual dismiss
+  const manualDismiss = useCallback((cardId: string) => {
+    const dt = dismissTimers.current.get(cardId);
+    if (dt) { clearTimeout(dt); dismissTimers.current.delete(cardId); }
+    setFeed((prev) => prev.map((c) =>
+      c.id === cardId ? { ...c, slide: 'exiting' as const } : c
+    ));
+    exitTimers.current.set(cardId, setTimeout(() => {
+      exitTimers.current.delete(cardId);
+      setFeed((f) => f.filter((c) => c.id !== cardId));
+    }, EXIT_ANIM_MS));
+  }, []);
+
+  // Watch streaming transitions to create/complete feed cards
   useEffect(() => {
     personas.forEach((persona) => {
       if (!persona.enabled) return;
@@ -100,98 +106,152 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
       const wasStreaming = prevStreaming.current[persona.id] ?? false;
       const nowStreaming = state.isStreaming;
 
-      if (nowStreaming && !wasStreaming) slideIn(persona.id);
-      else if (!nowStreaming && wasStreaming) scheduleExit(persona.id);
+      if (nowStreaming && !wasStreaming) {
+        // New stream started → add card to feed
+        const cardId = `${persona.id}-${Date.now()}`;
+        setFeed((prev) => {
+          // Enforce max visible — dismiss oldest if needed
+          const visibleCount = prev.filter((c) => c.slide !== 'exiting').length;
+          let next = [...prev];
+          if (visibleCount >= MAX_VISIBLE) {
+            const oldest = next.find((c) => c.slide === 'visible' && !c.streaming);
+            if (oldest) {
+              const dt = dismissTimers.current.get(oldest.id);
+              if (dt) { clearTimeout(dt); dismissTimers.current.delete(oldest.id); }
+              next = next.map((c) =>
+                c.id === oldest.id ? { ...c, slide: 'exiting' as const } : c
+              );
+              exitTimers.current.set(oldest.id, setTimeout(() => {
+                exitTimers.current.delete(oldest.id);
+                setFeed((f) => f.filter((c) => c.id !== oldest.id));
+              }, EXIT_ANIM_MS));
+            }
+          }
+          return [...next, {
+            id: cardId,
+            personaId: persona.id,
+            text: state.currentResponse || '',
+            citations: state.citations || [],
+            streaming: true,
+            slide: 'entering',
+          }];
+        });
+        // Transition entering → visible on next frame for CSS animation
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setFeed((prev) => prev.map((c) =>
+              c.personaId === persona.id && c.slide === 'entering'
+                ? { ...c, slide: 'visible' }
+                : c
+            ));
+          });
+        });
+      } else if (!nowStreaming && wasStreaming) {
+        // Stream ended → freeze card and schedule dismiss
+        setFeed((prev) => {
+          const updated = prev.map((c) => {
+            if (c.personaId === persona.id && c.streaming) {
+              return { ...c, streaming: false, text: state.currentResponse || c.text, citations: state.citations || c.citations };
+            }
+            return c;
+          });
+          // Schedule dismiss for the completed card
+          const completed = updated.find((c) => c.personaId === persona.id && !c.streaming && c.slide === 'visible');
+          if (completed) {
+            setTimeout(() => scheduleDismiss(completed.id), 0);
+          }
+          return updated;
+        });
+      }
 
       prevStreaming.current[persona.id] = nowStreaming;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personaStates]);
 
-  // Find the enabled card whose vertical center is closest to the cursor Y
-  const findClosestCard = useCallback((clientY: number): string | null => {
-    let bestId: string | null = null;
-    let bestDist = Infinity;
-    const enabledIds = personas.filter((p) => p.enabled).map((p) => p.id);
-    for (const id of enabledIds) {
-      const el = cardRefs.current[id];
-      if (!el) continue;
-      const meta = cardMeta[id];
-      if (!meta?.hasBeenActive) continue;
-      if (meta.slide === 'visible' || meta.slide === 'exiting') continue;
-      const rect = el.getBoundingClientRect();
-      const centerY = rect.top + rect.height / 2;
-      const dist = Math.abs(clientY - centerY);
-      if (dist < bestDist) { bestDist = dist; bestId = id; }
-    }
-    return bestId;
-  }, [personas, cardMeta]);
+  // Update streaming cards with latest text/citations
+  useEffect(() => {
+    setFeed((prev) => {
+      let changed = false;
+      const next = prev.map((card) => {
+        if (!card.streaming) return card;
+        const state = personaStates[card.personaId];
+        if (!state) return card;
+        const newText = state.currentResponse || '';
+        const newCitations = state.citations || [];
+        if (newText !== card.text || newCitations.length !== card.citations.length) {
+          changed = true;
+          return { ...card, text: newText, citations: newCitations };
+        }
+        return card;
+      });
+      return changed ? next : prev;
+    });
+  }, [personaStates]);
 
+  // Auto-dismiss oldest idle card when the column overflows the viewport
+  useEffect(() => {
+    const col = columnRef.current;
+    if (!col) return;
+    requestAnimationFrame(() => {
+      if (col.scrollHeight > col.clientHeight) {
+        // Find oldest non-streaming visible card to dismiss
+        const oldest = feed.find((c) => c.slide === 'visible' && !c.streaming);
+        if (oldest) {
+          const dt = dismissTimers.current.get(oldest.id);
+          if (dt) { clearTimeout(dt); dismissTimers.current.delete(oldest.id); }
+          setFeed((prev) => prev.map((c) =>
+            c.id === oldest.id ? { ...c, slide: 'exiting' as const } : c
+          ));
+          exitTimers.current.set(oldest.id, setTimeout(() => {
+            exitTimers.current.delete(oldest.id);
+            setFeed((f) => f.filter((c) => c.id !== oldest.id));
+          }, EXIT_ANIM_MS));
+        }
+      }
+    });
+  }, [feed]);
+
+  // Cleanup timers
   useEffect(() => () => {
-    Object.values(dismissTimers.current).forEach((t) => clearTimeout(t!));
-    Object.values(exitTimers.current).forEach((t) => clearTimeout(t!));
+    dismissTimers.current.forEach((t) => clearTimeout(t));
+    exitTimers.current.forEach((t) => clearTimeout(t));
   }, []);
 
   return (
-    <div
-      className={styles.rail}
-      style={{ '--peek-px': `${PEEK_PX}px` } as React.CSSProperties}
-    >
-      {/* Invisible hover strip at right edge — tracks Y to peek nearest card */}
-      <div
-        className={styles.hoverTrigger}
-        onMouseMove={(e) => setPeekingId(findClosestCard(e.clientY))}
-        onMouseLeave={() => setPeekingId(null)}
-      />
+    <div className={styles.rail}>
+      <div ref={columnRef} className={styles.cardsColumn}>
+        {feed.map((card) => {
+          const persona = personaMap.current.get(card.personaId);
+          if (!persona) return null;
 
-      <div className={styles.cardsColumn}>
-        {personas.filter((p) => p.enabled).map((persona) => {
-          const state = personaStates[persona.id];
-          if (!state) return null;
-
-          const meta    = cardMeta[persona.id] ?? { slide: 'hidden', hasBeenActive: false };
-          const isVisible = meta.slide === 'visible';
-          const isExiting = meta.slide === 'exiting';
-          const canPeek   = peekingId === persona.id && meta.hasBeenActive && !isVisible && !isExiting;
-
-          const { waveformState, currentResponse, isStreaming } = state;
-          const isThinking = waveformState === 'thinking';
-          const isActive   = waveformState === 'active';
-          const showWave   = isVisible && (isThinking || isActive);
-
-          const displayText = currentResponse;
+          const state = personaStates[card.personaId];
+          const isThinking = card.streaming && state?.waveformState === 'thinking';
+          const isActive = card.streaming && state?.waveformState === 'active';
 
           const trackClass = [
             styles.cardTrack,
-            isVisible ? styles.cardVisible  : '',
-            isExiting ? styles.cardExiting  : '',
-            canPeek   ? styles.cardPeeking  : '',
+            card.slide === 'visible' || card.slide === 'entering' ? styles.cardVisible : '',
+            card.slide === 'exiting' ? styles.cardExiting : '',
           ].filter(Boolean).join(' ');
 
           return (
             <div
-              key={persona.id}
-              ref={(el) => { cardRefs.current[persona.id] = el; }}
+              key={card.id}
               className={trackClass}
               style={{ '--persona-color': persona.color } as React.CSSProperties}
-              onMouseEnter={() => { if (canPeek) setPeekingId(persona.id); }}
-              onMouseLeave={() => { if (peekingId === persona.id) setPeekingId(null); }}
             >
-              {/* ── Unified card ── */}
               <div className={styles.card}>
-                {/* Close button — appears on hover for visible and peeked cards */}
-                {(isVisible || canPeek) && (
-                  <button
-                    className={styles.closeBtn}
-                    onClick={(e) => { e.stopPropagation(); manualDismiss(persona.id); setPeekingId(null); }}
-                    aria-label={`Dismiss ${persona.name}`}
-                    title="Dismiss"
-                  >
-                    ×
-                  </button>
-                )}
+                <button
+                  className={styles.closeBtn}
+                  onClick={(e) => { e.stopPropagation(); manualDismiss(card.id); }}
+                  aria-label={`Dismiss ${persona.name}`}
+                  title="Dismiss"
+                >
+                  ×
+                </button>
 
-                {/* Left column: name/role + response text */}
+                {/* Content: name/role + response text */}
                 <div className={styles.contentCol}>
                   <div className={styles.identity}>
                     <span className={styles.personaName}>
@@ -200,17 +260,17 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
                     <span className={styles.personaRole}>{persona.role}</span>
                   </div>
 
-                  {displayText ? (
+                  {card.text ? (
                     <p className={styles.responseText}>
-                      {displayText}
-                      {isStreaming && <span className={styles.cursor}>▋</span>}
+                      {card.text}
+                      {card.streaming && <span className={styles.cursor}>▋</span>}
                     </p>
                   ) : null}
 
-                  {/* Citation chips — shown for personas using Google Search (Theo, Nova) */}
-                  {(state.citations ?? []).length > 0 && (
+                  {/* Citation chips */}
+                  {card.citations.length > 0 && (
                     <div className={styles.citations}>
-                      {state.citations.slice(0, 4).map((c: Citation) => {
+                      {card.citations.slice(0, 4).map((c: Citation) => {
                         let domain = '';
                         const isProxy = c.uri.includes('vertexaisearch.cloud.google.com');
                         try { domain = new URL(c.uri).hostname.replace('www.', ''); } catch { domain = c.uri; }
@@ -243,13 +303,12 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
                   )}
                 </div>
 
-                {/* Right column: avatar then waveform to its right */}
+                {/* Avatar + waveform */}
                 <div className={styles.avatarCol}>
-                  {/* Avatar with thinking/active ring */}
                   <div className={[
                     styles.avatarRing,
                     isThinking ? styles.avatarThinking : '',
-                    isActive   ? styles.avatarActive   : '',
+                    isActive ? styles.avatarActive : '',
                   ].filter(Boolean).join(' ')}>
                     <div className={styles.avatar} aria-hidden="true">
                       <IconResolver name={persona.icon} size={24} className={styles.avatarGlyph} />
@@ -257,26 +316,23 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
                     <span className={[
                       styles.statusDot,
                       isThinking ? styles.dotThinking : '',
-                      isActive   ? styles.dotSpeaking  : '',
+                      isActive ? styles.dotSpeaking : '',
                     ].filter(Boolean).join(' ')} />
                   </div>
 
-                  {/* Waveform — to the RIGHT of the avatar */}
-                  {showWave ? (
+                  {card.streaming && (isThinking || isActive) ? (
                     <div className={styles.waveSlot}>
-                      <WaveformCanvas state={waveformState} color={persona.color} height={36} />
+                      <WaveformCanvas state={state?.waveformState ?? 'idle'} color={persona.color} height={36} />
                     </div>
                   ) : (
-                    /* Placeholder keeps width stable so card doesn't jump when wave appears */
                     <div className={styles.wavePlaceholder} />
                   )}
                 </div>
-
               </div>
             </div>
           );
         })}
-      </div>
+        </div>
     </div>
   );
 }

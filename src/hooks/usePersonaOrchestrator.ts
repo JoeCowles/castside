@@ -17,13 +17,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChunkHighlights, CommentaryMessage, Persona, PersonaState, TranscriptChunk, WaveformState } from '@/types';
-import { selectAgent, streamGemini, streamGeminiWithSearch, factCheckWithSearch } from '@/lib/gemini';
+import { selectAgent, streamGemini, streamGeminiWithSearch } from '@/lib/gemini';
 
 interface UsePersonaOrchestratorOptions {
   personas: Persona[];
   wordThreshold: number;
   apiKey: string;
-  model: string;
   onWaveformStateChange: (personaId: string, state: WaveformState) => void;
 }
 
@@ -59,7 +58,6 @@ export function usePersonaOrchestrator({
   personas,
   wordThreshold,
   apiKey,
-  model,
   onWaveformStateChange,
 }: UsePersonaOrchestratorOptions): UsePersonaOrchestratorReturn {
   const [personaStates, setPersonaStates] = useState<PersonaStatesMap>({});
@@ -83,13 +81,14 @@ export function usePersonaOrchestrator({
   useEffect(() => { commentaryHistoryRef.current = commentaryHistory; }, [commentaryHistory]);
 
   /** Build a short summary of this persona's recent statements to avoid repetition. */
-  const buildPriorStatements = useCallback((personaId: string, limit = 5): string => {
-    const msgs = commentaryHistoryRef.current
-      .filter((m) => m.personaId === personaId)
-      .slice(-limit);
-    if (msgs.length === 0) return '';
-    const lines = msgs.map((m, i) => `${i + 1}. ${m.text.slice(0, 200)}`).join('\n');
-    return `\n\nYour previous statements (do NOT repeat these):\n${lines}`;
+  const buildPriorStatements = useCallback((personaId: string, limit = 10): string => {
+    const allMsgs = commentaryHistoryRef.current.slice(-limit);
+    if (allMsgs.length === 0) return '';
+    const lines = allMsgs.map((m, i) => {
+      const label = m.personaId === personaId ? 'You' : m.personaName;
+      return `${i + 1}. [${label}] ${m.text}`;
+    }).join('\n');
+    return `\n\n=== PREVIOUS COMMENTARY (ALREADY SAID — DO NOT REPEAT) ===\n${lines}\n=== END PREVIOUS COMMENTARY ===\n\nThe above comments have ALREADY been made. Do NOT repeat, rephrase, or cover the same facts/topics. Find a completely different angle or say something entirely new.`;
   }, []);
 
   /** Highlight transcript chunks with a persona's color */
@@ -108,73 +107,14 @@ export function usePersonaOrchestrator({
       const triggerId = `${persona.id}-${Date.now()}`;
 
       const priorStatements = buildPriorStatements(persona.id);
-      const userContent = `Full transcript:\n"${fullContext}"\n\nLatest new content:\n"${latestChunk}"${priorStatements}\n\nProvide your commentary now.`;
+      const userContent = `Full transcript (for background context only):\n"${fullContext}"\n\n=== RESPOND TO THIS SECTION ===\n"${latestChunk}"\n=== END SECTION ===\n\nYour commentary MUST be about the section above. Your [[quoted text]] MUST come from that section. You may reference the full transcript for context, but your response should be centered on what was just said.${priorStatements}\n\nProvide your commentary now.`;
 
-      // Highlight the trigger chunks with this persona's color
-      highlightChunks(triggerChunkIds, persona.color);
+      // Flash for search personas (grounding citations), flash-lite for the rest
+      const personaModel = (persona.useSearch || persona.skipRelevance)
+        ? 'gemini-3-flash-preview'
+        : 'gemini-3.1-flash-lite-preview';
 
-      // ── Fact-check path (Theo) ──────────────────────────────────────────
-      if (persona.skipRelevance) {
-        isStreamingRef.current[persona.id] = true;
-        try {
-          const result = await factCheckWithSearch(persona.systemPrompt, userContent, {
-            apiKey,
-            model,
-            temperature: persona.temperature,
-            maxOutputTokens: persona.maxTokens,
-          });
-
-          isStreamingRef.current[persona.id] = false;
-
-          if (!result.responded) {
-            console.log(`[Orchestrator] ⏭ ${persona.name} no inaccuracy found — skipping  triggerId=${triggerId}`);
-            return;
-          }
-
-          console.log(`[Orchestrator] ▶ ${persona.name} found inaccuracy — showing card  triggerId=${triggerId}`);
-          const { quotedText, cleanText } = parseQuotedStatement(result.text);
-          const cooldownUntil = Date.now() + persona.cooldown * 1000;
-
-          updatePersonaState(persona.id, {
-            isStreaming: true,
-            waveformState: 'active',
-            currentResponse: cleanText,
-            cooldownUntil,
-            lastTriggeredAt: Date.now(),
-            error: null,
-            citations: result.citations,
-          });
-          onWaveformStateChange(persona.id, 'active');
-
-          setTimeout(() => {
-            updatePersonaState(persona.id, { isStreaming: false, waveformState: 'idle' });
-            onWaveformStateChange(persona.id, 'idle');
-          }, 500);
-
-          if (cleanText.trim()) {
-            setCommentaryHistory((prev) => [...prev, {
-              id: triggerId,
-              personaId: persona.id,
-              personaName: persona.name,
-              personaIcon: persona.icon,
-              personaColor: persona.color,
-              text: cleanText,
-              quotedText,
-              triggerChunk: latestChunk,
-              triggerChunkIds,
-              timestamp: Date.now(),
-              citations: result.citations,
-            }]);
-          }
-        } catch (err) {
-          isStreamingRef.current[persona.id] = false;
-          if ((err as Error).name === 'AbortError') return;
-          console.error(`[Orchestrator] ❌ ${persona.name} error:`, err, `triggerId=${triggerId}`);
-        }
-        return;
-      }
-
-      // ── Standard streaming path (orchestrator already decided this persona) ──
+      // ── All personas use the same streaming path ──
       console.log(`[Orchestrator] ▶ triggerPersona  id=${triggerId}  persona=${persona.name}  useSearch=${persona.useSearch}`);
       isStreamingRef.current[persona.id] = true;
 
@@ -194,7 +134,8 @@ export function usePersonaOrchestrator({
       onWaveformStateChange(persona.id, 'thinking');
 
       try {
-        const streamFn = persona.useSearch ? streamGeminiWithSearch : streamGemini;
+        const needsSearch = persona.useSearch || persona.skipRelevance;
+        const streamFn = needsSearch ? streamGeminiWithSearch : streamGemini;
 
         let fullResponse = '';
         let firstToken = true;
@@ -203,7 +144,7 @@ export function usePersonaOrchestrator({
 
         for await (const token of streamFn(persona.systemPrompt, userContent, {
           apiKey,
-          model,
+          model: personaModel,
           temperature: persona.temperature,
           maxOutputTokens: persona.maxTokens,
           signal: controller.signal,
@@ -238,6 +179,8 @@ export function usePersonaOrchestrator({
         onWaveformStateChange(persona.id, 'idle');
 
         if (cleanText.trim()) {
+          // Highlight transcript chunks after the response is complete
+          highlightChunks(triggerChunkIds, persona.color);
           setCommentaryHistory((prev) => [...prev, {
             id: triggerId,
             personaId: persona.id,
@@ -267,7 +210,7 @@ export function usePersonaOrchestrator({
         onWaveformStateChange(persona.id, 'idle');
       }
     },
-    [apiKey, model, updatePersonaState, onWaveformStateChange, buildPriorStatements, highlightChunks]
+    [apiKey, updatePersonaState, onWaveformStateChange, buildPriorStatements, highlightChunks]
   );
 
   const triggerAll = useCallback(
@@ -310,12 +253,12 @@ export function usePersonaOrchestrator({
       const recentChunkIds = allChunks.slice(-3).map((c) => c.id);
 
       // ── Agent Orchestrator: single call to select which persona to trigger ──
+      // Always use flash for the orchestrator — speed is critical here
       const selectedId = await selectAgent(
         available.map((p) => ({ id: p.id, name: p.name, role: p.role })),
         fullContext,
         latestChunk,
-        apiKey,
-        model
+        apiKey
       );
 
       if (!selectedId) {
@@ -329,7 +272,7 @@ export function usePersonaOrchestrator({
       console.log(`[Orchestrator] ✅ Orchestrator selected: ${persona.name} (${persona.id})`);
       triggerPersona(persona, latestChunk, fullContext, recentChunkIds);
     },
-    [personas, personaStates, triggerPersona, apiKey, model]
+    [personas, personaStates, triggerPersona, apiKey]
   );
 
   const onChunkCommitted = useCallback(

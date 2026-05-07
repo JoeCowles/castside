@@ -27,7 +27,6 @@ function updatePersona(list: Persona[], id: string, patch: Partial<Persona>): Pe
 function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
   const [apiKey, setApiKey] = useState(initialSettings.apiKey || '');
   const [elevenLabsKey, setElevenLabsKey] = useState(initialSettings.elevenLabsKey || '');
-  const [model, setModel] = useState(initialSettings.model || 'gemini-3.1-pro-preview');
   const [wordThreshold, setWordThreshold] = useState(initialSettings.wordThreshold || 50);
   const [personas, setPersonas] = useState<Persona[]>(initialSettings.personas.map((persona) => ({ ...persona })));
   const [youtubeIngestUrl, setYoutubeIngestUrl] = useState(initialSettings.youtubeIngestUrl);
@@ -94,7 +93,7 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
     const next: AppSettings = {
       apiKey,
       elevenLabsKey,
-      model,
+      model: initialSettings.model,
       wordThreshold,
       personas,
       youtubeIngestUrl,
@@ -163,28 +162,6 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
             </a>
           </div>
 
-          <div className={styles.group}>
-            <label className={styles.label} htmlFor="model-select">Model</label>
-            <p className={styles.hint}>Use Pro for the richest commentary and Flash for faster turn-around.</p>
-            <select
-              id="model-select"
-              className={styles.input}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              <optgroup label="Gemini 3.1">
-                <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-                <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview</option>
-              </optgroup>
-              <optgroup label="Gemini 3">
-                <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-              </optgroup>
-              <optgroup label="Gemini 2.5">
-                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-              </optgroup>
-            </select>
-          </div>
 
           <div className={styles.group}>
             <label className={styles.label} htmlFor="word-slider">Trigger Threshold</label>

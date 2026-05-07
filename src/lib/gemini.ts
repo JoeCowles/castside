@@ -90,9 +90,14 @@ async function resolveProxyUrl(proxyUri: string): Promise<string> {
  * Runs resolution in parallel with a short timeout per URL.
  */
 async function resolveCitations(citations: Citation[]): Promise<Citation[]> {
+  // Skip proxy resolution on non-HTTPS origins (localhost) — CORS blocks these requests
+  const isSecureOrigin = typeof location !== 'undefined' && location.protocol === 'https:';
+
   const resolved = await Promise.all(
     citations.map(async (c) => {
       if (!c.uri.includes('vertexaisearch.cloud.google.com')) return c;
+      // On localhost, just use the proxy URL directly (still clickable, redirects in browser)
+      if (!isSecureOrigin) return c;
       const realUri = await Promise.race([
         resolveProxyUrl(c.uri),
         new Promise<string>((res) => setTimeout(() => res(c.uri), 3000)),
@@ -143,7 +148,7 @@ export async function* streamGemini(
 ): AsyncGenerator<string> {
   const {
     apiKey,
-    model = 'gemini-3-flash-preview',
+    model = 'gemini-3.1-flash-lite-preview',
     temperature = 0.8,
     maxOutputTokens = 5000,
     signal,
@@ -220,7 +225,7 @@ export async function checkRelevance(
   fullContext: string,
   latestChunk: string,
   apiKey: string,
-  model = 'gemini-3-flash-preview',
+  model = 'gemini-3.1-flash-lite-preview',
   personaName = 'unknown'
 ): Promise<boolean> {
   if (!apiKey) return true;
@@ -326,7 +331,7 @@ export async function* streamGeminiWithSearch(
 ): AsyncGenerator<string> {
   const {
     apiKey,
-    model = 'gemini-3.1-pro-preview',
+    model = 'gemini-3-flash-preview',
     temperature = 0.7,
     maxOutputTokens = 5000,
     signal,
@@ -456,7 +461,7 @@ export async function factCheckWithSearch(
 ): Promise<FactCheckResult> {
   const {
     apiKey,
-    model = 'gemini-3.1-pro-preview',
+    model = 'gemini-3-flash-preview',
     temperature = 0.3,
     maxOutputTokens = 1000,
     signal,
@@ -600,7 +605,7 @@ export async function selectAgent(
   fullContext: string,
   latestChunk: string,
   apiKey: string,
-  model = 'gemini-3-flash-preview'
+  model = 'gemini-3.1-flash-lite-preview'
 ): Promise<string | null> {
   if (!apiKey || personas.length === 0) return null;
 
@@ -610,48 +615,63 @@ export async function selectAgent(
     .map((p) => `- "${p.id}": ${p.name} — ${p.role}`)
     .join('\n');
 
-  const systemPrompt = `You are an agent orchestrator for a live podcast commentary system. Your job is to read the latest transcript chunk and decide which ONE commentator (if any) should respond.
+  const systemPrompt = `You are an agent orchestrator for a live podcast commentary system. Your job is to read the latest transcript chunk and decide which ONE commentator should respond.
 
 Available commentators:
 ${personaList}
 
 RULES:
-- Pick the SINGLE most relevant commentator, or "none" if no commentator should respond.
-- Pick a fact-checker if the chunk contains a specific, verifiable factual claim (statistic, date, named entity with a factual assertion).
-- Pick a news commentator if the chunk references a specific recent event, person, or organization that has been in major news recently.
-- Pick a comedy/entertainment commentator if the chunk has something genuinely funny or absurd to riff on.
-- Pick an opposite-viewpoint commentator if the speaker makes a strong opinion or one-sided argument that deserves a counterpoint.
-- Pick a context commentator if there's an interesting cultural or historical reference worth expanding on.
-- Default to "none" — most chunks should NOT trigger any commentator. Only fire when there's a clear, high-value reason.
-- Never pick a commentator for greetings, filler, small talk, silence, or incomplete fragments.
+- Pick the SINGLE most relevant commentator for the latest chunk. You should almost always pick someone — these commentators are here to react to the conversation.
+- News commentator: Pick whenever the chunk mentions ANY current event, public figure, company, organization, tech topic, industry trend, or anything newsworthy. Be very liberal — if they're talking about something happening in the world, pick the news commentator.
+- Fact-checker: Pick when someone states a specific fact (a number, date, statistic, or claim about something that happened) that could be verified. Pick this even if the fact sounds correct — the fact-checker will confirm or correct it.
+- Comedy commentator: Pick whenever there's ANY opportunity for humor — something absurd, ironic, an exaggeration, a hot take, or just something fun to riff on. Be loose with this one.
+- Opposite-viewpoint commentator: Pick when the speaker expresses a strong opinion or one-sided take.
+- Only return "none" if the chunk is incomplete (cuts off mid-sentence), is just filler/silence, or is a greeting with no substance.
 
 Reply with ONLY valid JSON: {"agent": "<persona_id>"} or {"agent": "none"}`;
 
   const userPrompt = `Full transcript so far:\n"${fullContext}"\n\nLatest new chunk:\n"${latestChunk}"`;
 
-  console.groupCollapsed(`[Orchestrator] 🎯 selectAgent  personas=${personas.length}  chunkWords=${latestChunk.split(/\s+/).length}`);
+  console.groupCollapsed(`[Orchestrator] 🎯 selectAgent  model=${model}  personas=${personas.length}  chunkWords=${latestChunk.split(/\s+/).length}`);
   console.log(userPrompt.slice(0, 500));
   console.groupEnd();
 
+  const t0 = performance.now();
   try {
     const response = await withRetry(
       () => ai.models.generateContent({
         model,
         contents: userPrompt,
-        config: { systemInstruction: systemPrompt, maxOutputTokens: 1000, temperature: 0 },
+        config: { systemInstruction: systemPrompt, maxOutputTokens: 200, temperature: 0 },
       }),
       (r) => !extractText(r),
       `selectAgent(${model})`
     );
+    console.log(`[Orchestrator] ⏱ selectAgent took ${Math.round(performance.now() - t0)}ms`);
 
     const raw = extractText(response);
+    console.log(`[Orchestrator] 📝 raw response: "${raw}"`);
+
     const stripped = raw
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```\s*$/, '')
       .trim();
 
-    const parsed = JSON.parse(stripped) as { agent?: string };
-    const agentId = parsed.agent ?? 'none';
+    let agentId = 'none';
+    try {
+      const parsed = JSON.parse(stripped) as { agent?: string };
+      agentId = parsed.agent ?? 'none';
+    } catch (parseErr) {
+      console.warn(`[Orchestrator] ⚠ JSON parse failed — raw="${stripped}"`, parseErr);
+      // Try to extract agent ID from raw text as fallback
+      const match = stripped.match(/"agent"\s*:\s*"([^"]+)"/);
+      if (match) {
+        agentId = match[1];
+        console.log(`[Orchestrator] 🔧 Recovered agent ID from raw text: "${agentId}"`);
+      } else {
+        return null;
+      }
+    }
 
     console.log(
       `%c[Orchestrator] ${agentId === 'none' ? '⏭ none selected' : `✅ selected: ${agentId}`}`,
@@ -675,7 +695,7 @@ export async function validateGeminiKey(apiKey: string): Promise<{ valid: boolea
   try {
     const gen = streamGemini('You are helpful.', 'Say "ok".', {
       apiKey,
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       maxOutputTokens: 5,
     });
     await gen.next();

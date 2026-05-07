@@ -81,11 +81,10 @@ export default function DesktopPage() {
 
   const handleWaveformChange = useCallback(() => {}, []);
 
-  const { personaStates, commentaryHistory, onChunkCommitted } = usePersonaOrchestrator({
+  const { personaStates, commentaryHistory, chunkHighlights, onChunkCommitted } = usePersonaOrchestrator({
     personas: enabledPersonas,
     wordThreshold: settings.wordThreshold,
     apiKey: settings.apiKey,
-    model: settings.model,
     onWaveformStateChange: handleWaveformChange,
   });
 
@@ -309,9 +308,21 @@ export default function DesktopPage() {
               desktopScrolledUp.current = el.scrollHeight - el.scrollTop - el.clientHeight > 60;
             }}
           >
-            {chunks.map((chunk) => (
-              <p key={chunk.id} className={styles.chunk}>{chunk.text}</p>
-            ))}
+            {chunks.map((chunk) => {
+              const hlColor = chunkHighlights[chunk.id];
+              return (
+                <p
+                  key={chunk.id}
+                  className={styles.chunk}
+                  style={hlColor ? {
+                    color: hlColor,
+                    opacity: 1,
+                  } : undefined}
+                >
+                  {chunk.text}
+                </p>
+              );
+            })}
             {interimText && (
               <p className={styles.interim}>{interimText}<span className={styles.cursor}>▋</span></p>
             )}

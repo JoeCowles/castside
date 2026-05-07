@@ -4,13 +4,11 @@
 import { Persona } from '@/types';
 
 import theoSystem from '@/prompts/theo/system.md';
-import miloSystem from '@/prompts/milo/system.md';
 import bennySystem from '@/prompts/benny/system.md';
 import novaSystem from '@/prompts/nova/system.md';
 import rexSystem from '@/prompts/rex/system.md';
 
 import theoRelevance from '@/prompts/theo/relevance.md';
-import miloRelevance from '@/prompts/milo/relevance.md';
 import bennyRelevance from '@/prompts/benny/relevance.md';
 import novaRelevance from '@/prompts/nova/relevance.md';
 import rexRelevance from '@/prompts/rex/relevance.md';
@@ -24,27 +22,12 @@ export const DEFAULT_PERSONAS: Persona[] = [
     color: '#4F8EF7',
     cooldown: 18,
     temperature: 0.5,
-    maxTokens: 5000,
+    maxTokens: 1500,
     enabled: true,
     useSearch: true,
     skipRelevance: true,
     systemPrompt: theoSystem,
     relevancePrompt: theoRelevance,
-  },
-  {
-    id: 'fred',
-    name: 'Milo',
-    role: 'Context & Color',
-    icon: 'Music',
-    color: '#A78BFA',
-    cooldown: 22,
-    temperature: 0.85,
-    maxTokens: 5000,
-    enabled: false,
-    useSearch: false,
-    skipRelevance: false,
-    systemPrompt: miloSystem,
-    relevancePrompt: miloRelevance,
   },
   {
     id: 'jackie',
@@ -54,7 +37,7 @@ export const DEFAULT_PERSONAS: Persona[] = [
     color: '#F59E0B',
     cooldown: 12,
     temperature: 1.1,
-    maxTokens: 4000,
+    maxTokens: 1000,
     enabled: true,
     useSearch: false,
     skipRelevance: false,
@@ -69,7 +52,7 @@ export const DEFAULT_PERSONAS: Persona[] = [
     color: '#34D399',
     cooldown: 28,
     temperature: 0.6,
-    maxTokens: 5000,
+    maxTokens: 1500,
     enabled: true,
     useSearch: true,
     skipRelevance: false,
@@ -84,8 +67,8 @@ export const DEFAULT_PERSONAS: Persona[] = [
     color: '#F87171',
     cooldown: 10,
     temperature: 1.2,
-    maxTokens: 4000,
-    enabled: false,
+    maxTokens: 1000,
+    enabled: true,
     useSearch: false,
     skipRelevance: false,
     systemPrompt: rexSystem,
