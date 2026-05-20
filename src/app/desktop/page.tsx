@@ -7,6 +7,7 @@ import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
 import AgendaModal from '@/components/AgendaModal';
+import AgendaTutorialHint from '@/components/AgendaTutorialHint';
 import TopicTracker from '@/components/TopicTracker';
 import CommentaryHistory from '@/components/CommentaryHistory';
 import { Settings, Mic, MicOff, Eye, EyeOff, MessageSquare, ClipboardList } from 'lucide-react';
@@ -210,6 +211,7 @@ export default function DesktopPage() {
             className={[styles.settingsBtn, settings.agenda ? styles.agendaBtnOn : ''].join(' ')}
             onClick={() => setAgendaOpen(true)}
             id="btn-desktop-agenda"
+            data-agenda-button
             title={settings.agenda ? `Agenda (${agendaTopics.length} topics)` : 'Add episode agenda'}
             aria-label="Episode agenda"
           >
@@ -397,6 +399,7 @@ export default function DesktopPage() {
 
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <AgendaModal isOpen={agendaOpen} onClose={() => setAgendaOpen(false)} />
+      {!settings.agenda && !agendaOpen && <AgendaTutorialHint />}
     </div>
   );
 }

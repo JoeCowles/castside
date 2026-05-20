@@ -11,6 +11,7 @@ import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import CommentatorRail from '@/components/CommentatorRail';
 import SettingsModal from '@/components/SettingsModal';
 import AgendaModal from '@/components/AgendaModal';
+import AgendaTutorialHint from '@/components/AgendaTutorialHint';
 import TopicTracker from '@/components/TopicTracker';
 import CommentaryHistory from '@/components/CommentaryHistory';
 import { Settings, Mic, MicOff, Monitor, MonitorOff, MessageSquare, ClipboardList } from 'lucide-react';
@@ -220,6 +221,7 @@ export default function WebPage() {
             <button
               className={[styles.settingsBtn, settings.agenda ? styles.agendaBtnOn : ''].join(' ')}
               onClick={() => setAgendaOpen(true)}
+              data-agenda-button
               title={settings.agenda ? `Agenda (${agendaTopics.length} topics)` : 'Add episode agenda'}
               aria-label="Episode agenda"
             >
@@ -346,6 +348,7 @@ export default function WebPage() {
         )}
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
         <AgendaModal isOpen={agendaOpen} onClose={() => setAgendaOpen(false)} />
+        {!settings.agenda && !agendaOpen && <AgendaTutorialHint />}
       </div>
     );
   }
@@ -371,6 +374,7 @@ export default function WebPage() {
           <button
             className={[styles.settingsBtn, settings.agenda ? styles.agendaBtnOn : ''].join(' ')}
             onClick={() => setAgendaOpen(true)}
+            data-agenda-button
             title={settings.agenda ? `Agenda (${agendaTopics.length} topics)` : 'Add episode agenda'}
             aria-label="Episode agenda"
           >
@@ -554,6 +558,7 @@ export default function WebPage() {
       )}
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <AgendaModal isOpen={agendaOpen} onClose={() => setAgendaOpen(false)} />
+      {!settings.agenda && !agendaOpen && <AgendaTutorialHint />}
     </div>
   );
 }
