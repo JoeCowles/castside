@@ -10,14 +10,17 @@ import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import CommentatorRail from '@/components/CommentatorRail';
 import SettingsModal from '@/components/SettingsModal';
+import AgendaModal from '@/components/AgendaModal';
+import TopicTracker from '@/components/TopicTracker';
 import CommentaryHistory from '@/components/CommentaryHistory';
-import { Settings, Mic, MicOff, Monitor, MonitorOff, MessageSquare, GripVertical } from 'lucide-react';
+import { Settings, Mic, MicOff, Monitor, MonitorOff, MessageSquare, ClipboardList } from 'lucide-react';
 import type { CommentaryMessage } from '@/types';
 import styles from './web.module.css';
 
 export default function WebPage() {
   const { settings } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [agendaOpen, setAgendaOpen] = useState(false);
   const [peekMessage, setPeekMessage] = useState<CommentaryMessage | null>(null);
   const [peekPos, setPeekPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,38 +49,32 @@ export default function WebPage() {
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Draggable transcript panel
-  const transcriptPanelRef = useRef<HTMLDivElement | null>(null);
-  const dragState = useRef<{ dragging: boolean; startX: number; startY: number; origX: number; origY: number }>({
-    dragging: false, startX: 0, startY: 0, origX: 24, origY: 60,
-  });
-  const [panelPos, setPanelPos] = useState({ x: 24, y: 60 });
-
-  const onDragStart = useCallback((e: React.MouseEvent) => {
+  // Sidebar agenda/transcript split in screen-share mode (px from top of sidebar).
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
+  const [agendaSplitPx, setAgendaSplitPx] = useState(260);
+  const onSplitDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    dragState.current = {
-      dragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: panelPos.x,
-      origY: panelPos.y,
-    };
-
+    const sidebar = sidebarRef.current;
+    if (!sidebar) return;
+    const sidebarRect = sidebar.getBoundingClientRect();
     const onMove = (ev: MouseEvent) => {
-      if (!dragState.current.dragging) return;
-      setPanelPos({
-        x: dragState.current.origX + (ev.clientX - dragState.current.startX),
-        y: dragState.current.origY + (ev.clientY - dragState.current.startY),
-      });
+      const next = ev.clientY - sidebarRect.top;
+      // Keep both sections usable: agenda min 80px, transcript min 140px.
+      const min = 80;
+      const max = Math.max(min, sidebarRect.height - 140);
+      setAgendaSplitPx(Math.min(max, Math.max(min, next)));
     };
     const onUp = () => {
-      dragState.current.dragging = false;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [panelPos]);
+  }, []);
 
   // Mic device selection
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
@@ -109,10 +106,22 @@ export default function WebPage() {
 
   const handleWaveformChange = useCallback(() => {}, []);
 
-  const { personaStates, commentaryHistory, chunkHighlights, onChunkCommitted } = usePersonaOrchestrator({
+  const {
+    personaStates,
+    commentaryHistory,
+    chunkHighlights,
+    onChunkCommitted,
+    agendaTopics,
+    currentAgendaIndex,
+    coveredAgendaIndices,
+    currentSubtopicIndex,
+    coveredSubtopicKeys,
+    agendaParsing,
+  } = usePersonaOrchestrator({
     personas: enabledPersonas,
     wordThreshold: settings.wordThreshold,
     apiKey: settings.apiKey,
+    agenda: settings.agenda,
     onWaveformStateChange: handleWaveformChange,
   });
 
@@ -208,23 +217,58 @@ export default function WebPage() {
                 );
               })}
             </div>
+            <button
+              className={[styles.settingsBtn, settings.agenda ? styles.agendaBtnOn : ''].join(' ')}
+              onClick={() => setAgendaOpen(true)}
+              title={settings.agenda ? `Agenda (${agendaTopics.length} topics)` : 'Add episode agenda'}
+              aria-label="Episode agenda"
+            >
+              <ClipboardList size={15} />
+            </button>
             <button className={styles.settingsBtn} onClick={() => setSettingsOpen(true)} aria-label="Settings">
               <Settings size={15} />
             </button>
           </div>
         </header>
 
-        {/* Draggable transcript panel — always visible during screen share */}
-        <div
-          ref={transcriptPanelRef}
-          className={styles.floatingPanel}
-          style={{ left: panelPos.x, top: panelPos.y }}
-        >
-            {/* Drag handle */}
-            <div className={styles.dragHandle} onMouseDown={onDragStart}>
-              <GripVertical size={14} />
-              <span>Transcript</span>
-              <div className={styles.panelActions} onMouseDown={(e) => e.stopPropagation()}>
+        {/* Left sidebar — agenda (top) + draggable divider + transcript (below) */}
+        <aside className={styles.screenSidebar} ref={sidebarRef}>
+          {(agendaTopics.length > 0 || agendaParsing) && (
+            <>
+              <section
+                className={[styles.sidebarSection, styles.sidebarAgendaSection].join(' ')}
+                style={{ height: agendaSplitPx, flex: `0 0 ${agendaSplitPx}px` }}
+              >
+                <TopicTracker
+                  topics={agendaTopics}
+                  currentIndex={currentAgendaIndex}
+                  coveredIndices={coveredAgendaIndices}
+                  currentSubtopicIndex={currentSubtopicIndex}
+                  coveredSubtopicKeys={coveredSubtopicKeys}
+                  parsing={agendaParsing}
+                  defaultExpanded
+                  variant="flush"
+                  onEdit={() => setAgendaOpen(true)}
+                />
+              </section>
+              <div
+                className={styles.sidebarDivider}
+                onMouseDown={onSplitDragStart}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize agenda and transcript"
+              >
+                <span className={styles.sidebarDividerGrip} />
+              </div>
+            </>
+          )}
+
+          <section className={[styles.sidebarSection, styles.sidebarTranscriptSection].join(' ')}>
+            <div className={styles.sidebarSectionHeader}>
+              <span className={styles.sidebarSectionTitle}>
+                {showCommentary ? 'Commentary' : 'Transcript'}
+              </span>
+              <div className={styles.panelActions}>
                 {commentaryHistory.length > 0 && (
                   <button
                     className={[styles.panelTab, showCommentary ? styles.panelTabActive : ''].join(' ')}
@@ -241,12 +285,12 @@ export default function WebPage() {
             </div>
 
             {showCommentary ? (
-              <div className={styles.panelBody}>
+              <div className={styles.sidebarScroll}>
                 <CommentaryHistory messages={commentaryHistory} />
               </div>
             ) : (
               <div
-                className={styles.panelBody}
+                className={styles.sidebarScroll}
                 onScroll={(e) => {
                   const el = e.currentTarget;
                   scrolledUp.current = el.scrollHeight - el.scrollTop - el.clientHeight > 60;
@@ -278,7 +322,8 @@ export default function WebPage() {
                 <div ref={transcriptEndRef} />
               </div>
             )}
-        </div>
+          </section>
+        </aside>
 
         {/* Commentator rail */}
         <CommentatorRail personas={enabledPersonas} personaStates={personaStates} />
@@ -300,6 +345,7 @@ export default function WebPage() {
           </div>
         )}
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <AgendaModal isOpen={agendaOpen} onClose={() => setAgendaOpen(false)} />
       </div>
     );
   }
@@ -322,6 +368,14 @@ export default function WebPage() {
             className={[styles.apiDot, hasApiKey ? styles.apiDotOn : ''].join(' ')}
             title={hasApiKey ? 'Gemini connected' : 'No API key'}
           />
+          <button
+            className={[styles.settingsBtn, settings.agenda ? styles.agendaBtnOn : ''].join(' ')}
+            onClick={() => setAgendaOpen(true)}
+            title={settings.agenda ? `Agenda (${agendaTopics.length} topics)` : 'Add episode agenda'}
+            aria-label="Episode agenda"
+          >
+            <ClipboardList size={15} />
+          </button>
           <button
             className={styles.settingsBtn}
             onClick={() => setSettingsOpen(true)}
@@ -394,6 +448,21 @@ export default function WebPage() {
             <button className={styles.nudgeBtn} onClick={() => setSettingsOpen(true)}>Open Settings</button>
             {' '}to add your Gemini API key
           </p>
+        )}
+
+        {(agendaTopics.length > 0 || agendaParsing) && (
+          <div className={styles.agendaWrap}>
+            <TopicTracker
+              topics={agendaTopics}
+              currentIndex={currentAgendaIndex}
+              coveredIndices={coveredAgendaIndices}
+              currentSubtopicIndex={currentSubtopicIndex}
+              coveredSubtopicKeys={coveredSubtopicKeys}
+              parsing={agendaParsing}
+              defaultExpanded={!isListening}
+              onEdit={() => setAgendaOpen(true)}
+            />
+          </div>
         )}
 
         {commentaryHistory.length > 0 && (
@@ -484,6 +553,7 @@ export default function WebPage() {
         </div>
       )}
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AgendaModal isOpen={agendaOpen} onClose={() => setAgendaOpen(false)} />
     </div>
   );
 }

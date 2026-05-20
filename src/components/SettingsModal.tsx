@@ -98,6 +98,7 @@ function SettingsForm({ initialSettings, onClose, onSave }: SettingsFormProps) {
       personas,
       youtubeIngestUrl,
       youtubeStreamKey,
+      agenda: initialSettings.agenda,
     };
 
     setSaveLabel('Saving…');

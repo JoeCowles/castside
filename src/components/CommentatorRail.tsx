@@ -147,19 +147,37 @@ export default function CommentatorRail({ personas, personaStates }: Commentator
           });
         });
       } else if (!nowStreaming && wasStreaming) {
-        // Stream ended → freeze card and schedule dismiss
+        // Stream ended → freeze card and schedule dismiss (or kill it if blank)
         setFeed((prev) => {
+          let completed: FeedCard | null = null;
           const updated = prev.map((c) => {
             if (c.personaId === persona.id && c.streaming) {
-              return { ...c, streaming: false, text: state.currentResponse || c.text, citations: state.citations || c.citations };
+              const next: FeedCard = {
+                ...c,
+                streaming: false,
+                text: state.currentResponse || c.text,
+                citations: state.citations || c.citations,
+              };
+              completed = next;
+              return next;
             }
             return c;
           });
-          // Schedule dismiss for the completed card
-          const completed = updated.find((c) => c.personaId === persona.id && !c.streaming && c.slide === 'visible');
-          if (completed) {
-            setTimeout(() => scheduleDismiss(completed.id), 0);
+          if (!completed) return updated;
+          const finalCard: FeedCard = completed;
+          if (!finalCard.text.trim()) {
+            // No text was produced (e.g. MAX_TOKENS in thinking) — dismiss
+            // immediately instead of parking a blank card for 15 seconds.
+            const exiting = updated.map((c) =>
+              c.id === finalCard.id ? { ...c, slide: 'exiting' as const } : c
+            );
+            exitTimers.current.set(finalCard.id, setTimeout(() => {
+              exitTimers.current.delete(finalCard.id);
+              setFeed((f) => f.filter((c) => c.id !== finalCard.id));
+            }, EXIT_ANIM_MS));
+            return exiting;
           }
+          setTimeout(() => scheduleDismiss(finalCard.id), 0);
           return updated;
         });
       }

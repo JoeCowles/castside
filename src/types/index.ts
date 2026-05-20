@@ -74,7 +74,29 @@ export interface AppSettings {
   personas: Persona[];
   youtubeIngestUrl: string;
   youtubeStreamKey: string;
+  agenda: string;
 }
+
+export interface AgendaLink {
+  url: string;
+  title: string;
+  description: string;
+}
+
+export interface AgendaSubtopic {
+  text: string;
+  /** Host's notes + model-added supporting context. */
+  details: string;
+  /** Host-supplied URLs preserved + research-backed links found by the model. */
+  links: AgendaLink[];
+}
+
+export interface AgendaTopic {
+  title: string;
+  subtopics: AgendaSubtopic[];
+}
+
+export type AgendaItemStatus = 'pending' | 'current' | 'covered';
 
 export interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';

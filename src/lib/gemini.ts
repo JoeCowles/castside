@@ -4,7 +4,7 @@
 // All calls go directly from the browser to Google's API — no backend needed.
 
 import { GoogleGenAI } from '@google/genai';
-import type { Citation } from '@/types';
+import type { AgendaLink, AgendaSubtopic, AgendaTopic, Citation } from '@/types';
 
 /** Extract text from a Gemini generateContent response, using SDK getter with manual fallback. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -605,7 +605,8 @@ export async function selectAgent(
   fullContext: string,
   latestChunk: string,
   apiKey: string,
-  model = 'gemini-3.1-flash-lite-preview'
+  model = 'gemini-3.1-flash-lite-preview',
+  agenda = ''
 ): Promise<string | null> {
   if (!apiKey || personas.length === 0) return null;
 
@@ -615,10 +616,14 @@ export async function selectAgent(
     .map((p) => `- "${p.id}": ${p.name} — ${p.role}`)
     .join('\n');
 
+  const agendaBlock = agenda.trim()
+    ? `\n\nThe host has provided this agenda / show notes for the episode — use it to favor commentators whose angle is most relevant to the current segment:\n"""\n${agenda.trim()}\n"""`
+    : '';
+
   const systemPrompt = `You are an agent orchestrator for a live podcast commentary system. Your job is to read the latest transcript chunk and decide which ONE commentator should respond.
 
 Available commentators:
-${personaList}
+${personaList}${agendaBlock}
 
 RULES:
 - Pick the SINGLE most relevant commentator for the latest chunk. You should almost always pick someone — these commentators are here to react to the conversation.
@@ -688,6 +693,236 @@ Reply with ONLY valid JSON: {"agent": "<persona_id>"} or {"agent": "none"}`;
   } catch (err) {
     console.warn('[Orchestrator] ⚠ selectAgent failed — skipping this chunk:', err);
     return null;
+  }
+}
+
+/**
+ * Parse a freeform agenda into a structured list of topics-with-subtopics.
+ *
+ * Why this is its own call: an agenda can be hundreds of lines (sub-bullets,
+ * timestamps, links, host notes). Splitting on newlines would explode the
+ * topic tracker. This collapses the text into the actual segments the host
+ * plans to cover and tucks the detail lines under each segment as subtopics.
+ */
+export async function parseAgendaTopics(
+  agenda: string,
+  apiKey: string,
+  model = 'gemini-3-flash-preview'
+): Promise<AgendaTopic[]> {
+  const trimmed = agenda.trim();
+  if (!apiKey || !trimmed) return [];
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const systemPrompt = `You parse a podcast or meeting agenda into structured topics with subtopics, then enrich each subtopic with the host's notes AND your own web research.
+
+RULES:
+- Each top-level topic represents ONE segment of the show. Group related lines together — don't split detail lines into their own topics.
+- Each subtopic has THREE fields:
+  - "text": the host's subtopic point. Preserve their wording. Strip pure formatting noise (bullet prefixes, leading numbers) but keep the substance.
+  - "details": 2-5 sentences. FIRST, incorporate the host's own context for this subtopic VERBATIM — any prose, notes, quotes, stats, names, or descriptive text they wrote alongside the bullet. Do not drop the host's content. THEN add your own research-backed context: relevant background, key facts, dates, numbers, recent developments, useful framing. Be concrete (real names, real numbers). Never invent facts — if unsure, say what to verify.
+  - "links": array of supporting links. Include EVERY URL the host attached to this subtopic in the agenda, AND 1-4 additional reputable links you find via search. Each link: { "url": "<full https URL>", "title": "<short headline, ~6 words>", "description": "<1 sentence about what's there>" }. Only include URLs you are confident resolve. Prefer mainstream news, primary sources, official docs, Wikipedia. Empty array is acceptable if there's truly nothing useful.
+- Topic titles must be short (3-10 words). Strip timestamps, durations, bullet prefixes, and standalone URLs.
+- Drop pure logistics as standalone topics (housekeeping, "5 min", "TBD"), but keep them as subtopics if they belong under a real segment.
+- If a section has no clear title, infer a short one from the content.
+- If a topic has no explicit subtopics in the agenda, you MAY generate 1-3 subtopics covering the most useful angles, each fully enriched. Keep this restrained.
+- Return at most 20 topics. Preserve the host's ordering.
+
+You have Google Search available — use it to find real, current links and accurate facts.
+
+Reply with ONLY valid JSON, no prose before or after, no markdown fences, of this exact shape:
+{"topics": [{"title": "...", "subtopics": [{"text": "...", "details": "...", "links": [{"url": "...", "title": "...", "description": "..."}]}]}]}`;
+
+  const userPrompt = `Agenda:\n"""\n${trimmed}\n"""`;
+
+  try {
+    const response = await withRetry(
+      () => ai.models.generateContent({
+        model,
+        contents: userPrompt,
+        config: {
+          systemInstruction: systemPrompt,
+          maxOutputTokens: 16000,
+          temperature: 0.2,
+          tools: [{ googleSearch: {} }],
+        },
+      }),
+      (r) => !extractText(r),
+      `parseAgendaTopics(${model})`
+    );
+
+    const raw = extractText(response);
+    // Be generous about extracting JSON from the response — search-grounded models
+    // sometimes leak a sentence or fence around the structured payload.
+    const stripped = (() => {
+      let s = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+      const first = s.indexOf('{');
+      const last = s.lastIndexOf('}');
+      if (first > 0 && last > first) s = s.slice(first, last + 1);
+      return s;
+    })();
+
+    const parsed = JSON.parse(stripped) as { topics?: unknown };
+    if (!Array.isArray(parsed.topics)) return [];
+
+    const rawTopics: AgendaTopic[] = [];
+    for (const entry of parsed.topics) {
+      if (!entry || typeof entry !== 'object') continue;
+      const e = entry as { title?: unknown; subtopics?: unknown };
+      const title = typeof e.title === 'string' ? e.title.trim() : '';
+      if (!title) continue;
+      const subtopics = Array.isArray(e.subtopics)
+        ? e.subtopics
+            .map((s): AgendaSubtopic | null => {
+              if (typeof s === 'string') {
+                const text = s.trim();
+                return text ? { text, details: '', links: [] } : null;
+              }
+              if (s && typeof s === 'object') {
+                const obj = s as { text?: unknown; details?: unknown; links?: unknown };
+                const text = typeof obj.text === 'string' ? obj.text.trim() : '';
+                if (!text) return null;
+                const details = typeof obj.details === 'string' ? obj.details.trim() : '';
+                const links: AgendaLink[] = Array.isArray(obj.links)
+                  ? obj.links
+                      .map((l): AgendaLink | null => {
+                        if (!l || typeof l !== 'object') return null;
+                        const lo = l as { url?: unknown; title?: unknown; description?: unknown };
+                        const url = typeof lo.url === 'string' ? lo.url.trim() : '';
+                        if (!url || !/^https?:\/\//i.test(url)) return null;
+                        const linkTitle = typeof lo.title === 'string' ? lo.title.trim() : '';
+                        const description = typeof lo.description === 'string' ? lo.description.trim() : '';
+                        return { url, title: linkTitle || url, description };
+                      })
+                      .filter((l): l is AgendaLink => l !== null)
+                  : [];
+                return { text, details, links };
+              }
+              return null;
+            })
+            .filter((s): s is AgendaSubtopic => s !== null)
+        : [];
+      rawTopics.push({ title, subtopics });
+      if (rawTopics.length >= 20) break;
+    }
+
+    // Resolve any vertex-proxy URLs the model may have emitted (search-grounded
+    // links sometimes come back as redirect URIs). Run all link resolutions in
+    // parallel so we don't serialize per-subtopic.
+    const flatProxies: { topicIdx: number; subIdx: number; linkIdx: number; uri: string; title: string }[] = [];
+    rawTopics.forEach((t, ti) => {
+      t.subtopics.forEach((s, si) => {
+        s.links.forEach((l, li) => {
+          if (l.url.includes('vertexaisearch.cloud.google.com')) {
+            flatProxies.push({ topicIdx: ti, subIdx: si, linkIdx: li, uri: l.url, title: l.title });
+          }
+        });
+      });
+    });
+    if (flatProxies.length > 0) {
+      const resolved = await resolveCitations(flatProxies.map((p) => ({ uri: p.uri, title: p.title })));
+      flatProxies.forEach((p, i) => {
+        const r = resolved[i];
+        if (r) {
+          const link = rawTopics[p.topicIdx].subtopics[p.subIdx].links[p.linkIdx];
+          link.url = r.uri;
+          if (!link.title || link.title === p.uri) link.title = r.title;
+        }
+      });
+    }
+
+    return rawTopics;
+  } catch (err) {
+    console.warn('[Agenda] parseAgendaTopics failed:', err);
+    return [];
+  }
+}
+
+export interface AgendaClassification {
+  topicIndex: number | null;
+  subtopicIndex: number | null;
+}
+
+/**
+ * Classify the conversation against the agenda — both which top-level topic
+ * and (if the topic has subtopics) which subtopic the speakers are on.
+ * Combined into one call so we only pay for one LLM round trip per chunk.
+ */
+export async function classifyAgendaTopic(
+  topics: AgendaTopic[],
+  fullContext: string,
+  latestChunk: string,
+  apiKey: string,
+  model = 'gemini-3.1-flash-lite-preview'
+): Promise<AgendaClassification> {
+  const empty: AgendaClassification = { topicIndex: null, subtopicIndex: null };
+  if (!apiKey || topics.length === 0) return empty;
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  // Render the agenda as a numbered outline with subtopics nested under topics.
+  const outline = topics
+    .map((t, i) => {
+      const subs = t.subtopics.length
+        ? '\n' + t.subtopics.map((s, j) => `   ${i}.${j}: ${s.text}`).join('\n')
+        : '';
+      return `${i}: ${t.title}${subs}`;
+    })
+    .join('\n');
+
+  const systemPrompt = `You classify a live podcast transcript against a numbered agenda that may include subtopics.
+
+Agenda:
+${outline}
+
+Identify TWO things about the LATEST chunk:
+1. Which top-level topic (integer "index") it's on. -1 if the conversation is clearly off-agenda (small talk, intros/outros, unrelated tangent). Never invent indexes outside the listed range.
+2. Within that topic, which specific subtopic ("subIndex") is being discussed right now. If the topic has no subtopics, or the speakers are on the topic generally but haven't hit a specific subtopic yet, return null.
+
+RULES:
+- Match by topic/intent, not exact wording — a host can discuss subtopic 2.1 without saying it verbatim.
+- The latest chunk is the primary signal; use the wider transcript only as backup context.
+- Be conservative on subIndex — only commit to a subtopic when you can clearly point to it.
+
+Reply with ONLY valid JSON of this shape: {"index": <int>, "subIndex": <int|null>}`;
+
+  const userPrompt = `Full transcript so far:\n"""\n${fullContext}\n"""\n\nLatest chunk:\n"""\n${latestChunk}\n"""`;
+
+  try {
+    const response = await withRetry(
+      () => ai.models.generateContent({
+        model,
+        contents: userPrompt,
+        config: { systemInstruction: systemPrompt, maxOutputTokens: 200, temperature: 0 },
+      }),
+      (r) => !extractText(r),
+      `classifyAgendaTopic(${model})`
+    );
+
+    const raw = extractText(response);
+    const stripped = raw
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/, '')
+      .trim();
+
+    const parsed = JSON.parse(stripped) as { index?: unknown; subIndex?: unknown };
+    let topicIndex: number | null = null;
+    if (typeof parsed.index === 'number' && parsed.index >= 0 && parsed.index < topics.length) {
+      topicIndex = parsed.index;
+    }
+
+    let subtopicIndex: number | null = null;
+    if (topicIndex !== null && typeof parsed.subIndex === 'number') {
+      const subs = topics[topicIndex].subtopics;
+      if (parsed.subIndex >= 0 && parsed.subIndex < subs.length) {
+        subtopicIndex = parsed.subIndex;
+      }
+    }
+
+    return { topicIndex, subtopicIndex };
+  } catch (err) {
+    console.warn('[Agenda] classifyAgendaTopic failed:', err);
+    return empty;
   }
 }
 

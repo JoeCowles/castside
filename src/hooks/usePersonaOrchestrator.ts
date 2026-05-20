@@ -16,13 +16,14 @@
 //   5. Set waveformState = 'idle', apply cooldown
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChunkHighlights, CommentaryMessage, Persona, PersonaState, TranscriptChunk, WaveformState } from '@/types';
-import { selectAgent, streamGemini, streamGeminiWithSearch } from '@/lib/gemini';
+import { AgendaTopic, ChunkHighlights, CommentaryMessage, Persona, PersonaState, TranscriptChunk, WaveformState } from '@/types';
+import { classifyAgendaTopic, parseAgendaTopics, selectAgent, streamGemini, streamGeminiWithSearch } from '@/lib/gemini';
 
 interface UsePersonaOrchestratorOptions {
   personas: Persona[];
   wordThreshold: number;
   apiKey: string;
+  agenda?: string;
   onWaveformStateChange: (personaId: string, state: WaveformState) => void;
 }
 
@@ -31,6 +32,28 @@ interface UsePersonaOrchestratorReturn {
   commentaryHistory: CommentaryMessage[];
   chunkHighlights: ChunkHighlights;
   onChunkCommitted: (chunkText: string, allChunks: TranscriptChunk[]) => void;
+  agendaTopics: AgendaTopic[];
+  currentAgendaIndex: number | null;
+  coveredAgendaIndices: Set<number>;
+  currentSubtopicIndex: number | null;
+  coveredSubtopicKeys: Set<string>;
+  agendaParsing: boolean;
+}
+
+/** Stable key for a subtopic — used in the covered set so it can span topics. */
+function subKey(topicIdx: number, subIdx: number): string {
+  return `${topicIdx}:${subIdx}`;
+}
+
+/** Fallback line-splitter used only when no API key is available. */
+function fallbackParseAgenda(agenda: string): AgendaTopic[] {
+  if (!agenda.trim()) return [];
+  return agenda
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•·]|\d+[.)])\s*/, '').trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 20)
+    .map((title) => ({ title, subtopics: [] as AgendaTopic['subtopics'] }));
 }
 
 function makeInitialState(): PersonaState {
@@ -58,16 +81,92 @@ export function usePersonaOrchestrator({
   personas,
   wordThreshold,
   apiKey,
+  agenda = '',
   onWaveformStateChange,
 }: UsePersonaOrchestratorOptions): UsePersonaOrchestratorReturn {
   const [personaStates, setPersonaStates] = useState<PersonaStatesMap>({});
   const [commentaryHistory, setCommentaryHistory] = useState<CommentaryMessage[]>([]);
   const [chunkHighlights, setChunkHighlights] = useState<ChunkHighlights>({});
+  const [currentAgendaIndex, setCurrentAgendaIndex] = useState<number | null>(null);
+  const [coveredAgendaIndices, setCoveredAgendaIndices] = useState<Set<number>>(() => new Set());
+  const [currentSubtopicIndex, setCurrentSubtopicIndex] = useState<number | null>(null);
+  const [coveredSubtopicKeys, setCoveredSubtopicKeys] = useState<Set<string>>(() => new Set());
 
   const wordBufferRef = useRef<string[]>([]);
   const abortControllersRef = useRef<Record<string, AbortController>>({});
   // Synchronous streaming tracker (React state is async, this avoids stale closure re-triggers)
   const isStreamingRef = useRef<Record<string, boolean>>({});
+  // Keep agenda accessible inside callbacks without recreating them on every keystroke
+  const agendaRef = useRef(agenda);
+  useEffect(() => { agendaRef.current = agenda; }, [agenda]);
+
+  // Agenda topics are parsed by Gemini so that long agendas with many
+  // sub-bullets/details collapse down to actual segments — with the detail
+  // lines preserved as subtopics for use as commentator context.
+  const [agendaTopics, setAgendaTopics] = useState<AgendaTopic[]>([]);
+  const [agendaParsing, setAgendaParsing] = useState(false);
+  const agendaTopicsRef = useRef<AgendaTopic[]>([]);
+  useEffect(() => { agendaTopicsRef.current = agendaTopics; }, [agendaTopics]);
+
+  const currentAgendaIndexRef = useRef<number | null>(null);
+  useEffect(() => { currentAgendaIndexRef.current = currentAgendaIndex; }, [currentAgendaIndex]);
+
+  const currentSubtopicIndexRef = useRef<number | null>(null);
+  useEffect(() => { currentSubtopicIndexRef.current = currentSubtopicIndex; }, [currentSubtopicIndex]);
+
+  // Refs for covered sets so the classifier callback can read them synchronously
+  // without re-creating triggerAll on every covered-set change.
+  const coveredAgendaIndicesRef = useRef<Set<number>>(new Set());
+  useEffect(() => { coveredAgendaIndicesRef.current = coveredAgendaIndices; }, [coveredAgendaIndices]);
+  const coveredSubtopicKeysRef = useRef<Set<string>>(new Set());
+  useEffect(() => { coveredSubtopicKeysRef.current = coveredSubtopicKeys; }, [coveredSubtopicKeys]);
+
+  // Parse the agenda whenever it changes. The agenda only changes when the
+  // user explicitly saves it (via SettingsContext.updateSettings), so this
+  // doesn't refire on every keystroke.
+  useEffect(() => {
+    const trimmed = agenda.trim();
+
+    // Reset tracker progress whenever the agenda source changes
+    setCurrentAgendaIndex(null);
+    setCoveredAgendaIndices(new Set());
+    setCurrentSubtopicIndex(null);
+    setCoveredSubtopicKeys(new Set());
+
+    if (!trimmed) {
+      setAgendaTopics([]);
+      setAgendaParsing(false);
+      return;
+    }
+
+    if (!apiKey) {
+      // Local-only fallback so the UI still works without a key
+      setAgendaTopics(fallbackParseAgenda(trimmed));
+      setAgendaParsing(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAgendaParsing(true);
+    parseAgendaTopics(trimmed, apiKey)
+      .then((topics) => {
+        if (cancelled) return;
+        setAgendaTopics(topics.length > 0 ? topics : fallbackParseAgenda(trimmed));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[Orchestrator] agenda parse failed:', err);
+        setAgendaTopics(fallbackParseAgenda(trimmed));
+      })
+      .finally(() => {
+        if (!cancelled) setAgendaParsing(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [agenda, apiKey]);
+
+  // Synchronous guard so we don't fire overlapping classifier calls
+  const classifyingRef = useRef(false);
 
   const updatePersonaState = useCallback((id: string, patch: Partial<PersonaState>) => {
     setPersonaStates((prev) => ({
@@ -107,12 +206,45 @@ export function usePersonaOrchestrator({
       const triggerId = `${persona.id}-${Date.now()}`;
 
       const priorStatements = buildPriorStatements(persona.id);
-      const userContent = `Full transcript (for background context only):\n"${fullContext}"\n\n=== RESPOND TO THIS SECTION ===\n"${latestChunk}"\n=== END SECTION ===\n\nYour commentary MUST be about the section above. Your [[quoted text]] MUST come from that section. You may reference the full transcript for context, but your response should be centered on what was just said.${priorStatements}\n\nProvide your commentary now.`;
+
+      const currentAgenda = agendaRef.current.trim();
+      const topics = agendaTopicsRef.current;
+      const idx = currentAgendaIndexRef.current;
+      const subIdx = currentSubtopicIndexRef.current;
+      let currentTopicLine = '';
+      if (idx !== null && topics[idx]) {
+        const current = topics[idx];
+        const subBlock = current.subtopics.length
+          ? `\nContext / talking points for this segment (→ marks current subpoint):\n${current.subtopics
+              .map((s, i) => {
+                const marker = i === subIdx ? '→' : '-';
+                const detail = s.details ? `\n   ${i === subIdx ? ' ' : ' '}  · ${s.details}` : '';
+                return `${marker} ${s.text}${detail}`;
+              })
+              .join('\n')}`
+          : '';
+        const subLine = subIdx !== null && current.subtopics[subIdx]
+          ? ` (currently on subpoint: "${current.subtopics[subIdx].text}")`
+          : '';
+        currentTopicLine = `\n\nCurrent agenda item being discussed: "${current.title}"${subLine}.${subBlock}\nFrame your commentary so it lands inside this segment.`;
+      }
+      const agendaBlock = currentAgenda
+        ? `\n\n=== EPISODE AGENDA / SHOW NOTES ===\n${currentAgenda}\n=== END AGENDA ===${currentTopicLine}\n\nUse the agenda above to ground your commentary — it tells you the host's plan, guests, and intended angles. Don't just recap the agenda; react to what's being said with that plan in mind.\n`
+        : '';
+
+      const userContent = `${agendaBlock}Full transcript (for background context only):\n"${fullContext}"\n\n=== RESPOND TO THIS SECTION ===\n"${latestChunk}"\n=== END SECTION ===\n\nYour commentary MUST be about the section above. Your [[quoted text]] MUST come from that section. You may reference the full transcript for context, but your response should be centered on what was just said.${priorStatements}\n\nProvide your commentary now.`;
 
       // Flash for search personas (grounding citations), flash-lite for the rest
-      const personaModel = (persona.useSearch || persona.skipRelevance)
+      const needsThinking = persona.useSearch || persona.skipRelevance;
+      const personaModel = needsThinking
         ? 'gemini-3-flash-preview'
         : 'gemini-3.1-flash-lite-preview';
+      // The thinking-enabled flash model burns tokens on internal reasoning + tool
+      // calls before emitting visible output. Anything under ~4k tends to truncate
+      // mid-response (or produce a blank), so floor it here for those personas.
+      const maxOutputTokens = needsThinking
+        ? Math.max(persona.maxTokens, 4000)
+        : persona.maxTokens;
 
       // ── All personas use the same streaming path ──
       console.log(`[Orchestrator] ▶ triggerPersona  id=${triggerId}  persona=${persona.name}  useSearch=${persona.useSearch}`);
@@ -134,8 +266,7 @@ export function usePersonaOrchestrator({
       onWaveformStateChange(persona.id, 'thinking');
 
       try {
-        const needsSearch = persona.useSearch || persona.skipRelevance;
-        const streamFn = needsSearch ? streamGeminiWithSearch : streamGemini;
+        const streamFn = needsThinking ? streamGeminiWithSearch : streamGemini;
 
         let fullResponse = '';
         let firstToken = true;
@@ -146,7 +277,7 @@ export function usePersonaOrchestrator({
           apiKey,
           model: personaModel,
           temperature: persona.temperature,
-          maxOutputTokens: persona.maxTokens,
+          maxOutputTokens,
           signal: controller.signal,
           onCitations: (citations) => {
             if (citations.length > 0) {
@@ -252,13 +383,81 @@ export function usePersonaOrchestrator({
       // (the last few chunks that contributed words to this trigger)
       const recentChunkIds = allChunks.slice(-3).map((c) => c.id);
 
+      // ── Agenda classifier (fire-and-forget) — top-level topic + subtopic ──
+      const topicsForClassify = agendaTopicsRef.current;
+      if (topicsForClassify.length > 0 && !classifyingRef.current) {
+        classifyingRef.current = true;
+        classifyAgendaTopic(topicsForClassify, fullContext, latestChunk, apiKey)
+          .then(({ topicIndex, subtopicIndex }) => {
+            if (topicIndex === null) return;
+            const prevTopic = currentAgendaIndexRef.current;
+            const prevSub = currentSubtopicIndexRef.current;
+            const coveredTopics = coveredAgendaIndicesRef.current;
+            const coveredSubs = coveredSubtopicKeysRef.current;
+
+            if (prevTopic !== topicIndex) {
+              // Speakers may have referenced an earlier topic — once we've moved
+              // past it, never reopen. Stay on the current topic.
+              if (coveredTopics.has(topicIndex)) return;
+
+              // Genuinely moved on to a new (un-crossed) topic.
+              setCurrentAgendaIndex(topicIndex);
+              // Pick up a subtopic for the new topic only if it isn't already crossed off.
+              const nextSub =
+                subtopicIndex !== null && !coveredSubs.has(subKey(topicIndex, subtopicIndex))
+                  ? subtopicIndex
+                  : null;
+              setCurrentSubtopicIndex(nextSub);
+
+              if (prevTopic !== null) {
+                setCoveredAgendaIndices((prev) => {
+                  if (prev.has(prevTopic)) return prev;
+                  const next = new Set(prev);
+                  next.add(prevTopic);
+                  return next;
+                });
+                // Whatever subtopic we were last on in the previous topic
+                // gets crossed off — the speakers moved on.
+                if (prevSub !== null) {
+                  setCoveredSubtopicKeys((prev) => {
+                    const key = subKey(prevTopic, prevSub);
+                    if (prev.has(key)) return prev;
+                    const next = new Set(prev);
+                    next.add(key);
+                    return next;
+                  });
+                }
+              }
+            } else if (subtopicIndex !== null && subtopicIndex !== prevSub) {
+              // Same top-level topic, different subtopic candidate.
+              // Skip if it's already crossed off — never reopen subpoints either.
+              if (coveredSubs.has(subKey(topicIndex, subtopicIndex))) return;
+
+              setCurrentSubtopicIndex(subtopicIndex);
+              if (prevSub !== null) {
+                setCoveredSubtopicKeys((prev) => {
+                  const key = subKey(topicIndex, prevSub);
+                  if (prev.has(key)) return prev;
+                  const next = new Set(prev);
+                  next.add(key);
+                  return next;
+                });
+              }
+            }
+          })
+          .catch((err) => console.warn('[Orchestrator] agenda classify failed:', err))
+          .finally(() => { classifyingRef.current = false; });
+      }
+
       // ── Agent Orchestrator: single call to select which persona to trigger ──
       // Always use flash for the orchestrator — speed is critical here
       const selectedId = await selectAgent(
         available.map((p) => ({ id: p.id, name: p.name, role: p.role })),
         fullContext,
         latestChunk,
-        apiKey
+        apiKey,
+        undefined,
+        agendaRef.current
       );
 
       if (!selectedId) {
@@ -307,5 +506,16 @@ export function usePersonaOrchestrator({
     });
   }, [personas]);
 
-  return { personaStates, commentaryHistory, chunkHighlights, onChunkCommitted };
+  return {
+    personaStates,
+    commentaryHistory,
+    chunkHighlights,
+    onChunkCommitted,
+    agendaTopics,
+    currentAgendaIndex,
+    coveredAgendaIndices,
+    currentSubtopicIndex,
+    coveredSubtopicKeys,
+    agendaParsing,
+  };
 }

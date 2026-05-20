@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   personas: makeDefaultPersonas(),
   youtubeIngestUrl: 'rtmps://a.rtmps.youtube.com/live2',
   youtubeStreamKey: '',
+  agenda: '',
 };
 
 function makeDefaultSettings(): AppSettings {
@@ -106,6 +107,7 @@ export function loadSettings(): AppSettings {
       personas: migratePersonas(parsed),
       youtubeIngestUrl: parsed.youtubeIngestUrl || DEFAULT_SETTINGS.youtubeIngestUrl,
       youtubeStreamKey: parsed.youtubeStreamKey || '',
+      agenda: typeof parsed.agenda === 'string' ? parsed.agenda : '',
     };
     cachedRawSettings = raw;
     cachedSettingsSnapshot = next;

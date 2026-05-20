@@ -6,8 +6,10 @@ import { useSettings } from '@/context/SettingsContext';
 import { useTranscript } from '@/hooks/useTranscript';
 import { usePersonaOrchestrator } from '@/hooks/usePersonaOrchestrator';
 import SettingsModal from '@/components/SettingsModal';
+import AgendaModal from '@/components/AgendaModal';
+import TopicTracker from '@/components/TopicTracker';
 import CommentaryHistory from '@/components/CommentaryHistory';
-import { Settings, Mic, MicOff, Eye, EyeOff, MessageSquare } from 'lucide-react';
+import { Settings, Mic, MicOff, Eye, EyeOff, MessageSquare, ClipboardList } from 'lucide-react';
 import styles from './desktop.module.css';
 import type { MainWindowElectronAPI } from '@/types/electron';
 
@@ -23,6 +25,7 @@ function getMainApi(): MainWindowElectronAPI | undefined {
 export default function DesktopPage() {
   const { settings } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [agendaOpen, setAgendaOpen] = useState(false);
   const [screenshareVisible, setScreenshareVisible] = useState(false);
   const [showCommentary, setShowCommentary] = useState(false);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
@@ -81,10 +84,22 @@ export default function DesktopPage() {
 
   const handleWaveformChange = useCallback(() => {}, []);
 
-  const { personaStates, commentaryHistory, chunkHighlights, onChunkCommitted } = usePersonaOrchestrator({
+  const {
+    personaStates,
+    commentaryHistory,
+    chunkHighlights,
+    onChunkCommitted,
+    agendaTopics,
+    currentAgendaIndex,
+    coveredAgendaIndices,
+    currentSubtopicIndex,
+    coveredSubtopicKeys,
+    agendaParsing,
+  } = usePersonaOrchestrator({
     personas: enabledPersonas,
     wordThreshold: settings.wordThreshold,
     apiKey: settings.apiKey,
+    agenda: settings.agenda,
     onWaveformStateChange: handleWaveformChange,
   });
 
@@ -192,6 +207,15 @@ export default function DesktopPage() {
             </button>
           )}
           <button
+            className={[styles.settingsBtn, settings.agenda ? styles.agendaBtnOn : ''].join(' ')}
+            onClick={() => setAgendaOpen(true)}
+            id="btn-desktop-agenda"
+            title={settings.agenda ? `Agenda (${agendaTopics.length} topics)` : 'Add episode agenda'}
+            aria-label="Episode agenda"
+          >
+            <ClipboardList size={15} />
+          </button>
+          <button
             className={styles.settingsBtn}
             onClick={() => setSettingsOpen(true)}
             id="btn-desktop-settings"
@@ -281,6 +305,20 @@ export default function DesktopPage() {
           </p>
         )}
 
+        {/* Agenda topic tracker — only shown when an agenda is configured */}
+        {(agendaTopics.length > 0 || agendaParsing) && (
+          <TopicTracker
+            topics={agendaTopics}
+            currentIndex={currentAgendaIndex}
+            coveredIndices={coveredAgendaIndices}
+            currentSubtopicIndex={currentSubtopicIndex}
+            coveredSubtopicKeys={coveredSubtopicKeys}
+            parsing={agendaParsing}
+            defaultExpanded={!isListening}
+            onEdit={() => setAgendaOpen(true)}
+          />
+        )}
+
         {/* Chat toggle — visible whenever there's commentary */}
         {commentaryHistory.length > 0 && (
           <button
@@ -358,6 +396,7 @@ export default function DesktopPage() {
       </footer>
 
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AgendaModal isOpen={agendaOpen} onClose={() => setAgendaOpen(false)} />
     </div>
   );
 }

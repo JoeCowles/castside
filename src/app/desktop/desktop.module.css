@@ -131,6 +131,15 @@
 }
 .visibilityBtnOn:hover { color: #ffedd5; background: rgba(251, 146, 60, 0.2); }
 
+.agendaBtnOn {
+  color: #a78bfa;
+  background: rgba(124, 92, 252, 0.12);
+}
+.agendaBtnOn:hover {
+  color: #c4b5fd;
+  background: rgba(124, 92, 252, 0.2);
+}
+
 /* ── Main area ──────────────────────────────────────────────────────────────── */
 .main {
   position: relative;
